@@ -762,7 +762,14 @@ public final class PreviewFrameProvider: VideoFrameProviderProtocol {
         }
     }
 
-    private final class SourceOutput {
+    /// Mutable state (player, output, caches) is only ever touched from the
+    /// main actor: `PreviewFrameProvider` is driven by the main-actor
+    /// `TimelineRenderer`/`CompositionCoordinator`, and every AVFoundation
+    /// callback in this file hops back to `DispatchQueue.main` before touching
+    /// it. `@unchecked Sendable` lets the compiler accept passing the object
+    /// across the non-Sendable AVFoundation completion regions without
+    /// "sending risks causing data races" errors.
+    private final class SourceOutput: @unchecked Sendable {
         let segmentKey: SegmentKey
         let item: AVPlayerItem
         let player: AVPlayer
@@ -970,51 +977,71 @@ public final class PreviewFrameProvider: VideoFrameProviderProtocol {
         warmSource(for: nextSpec)
     }
 
+    /// Carries `onSourcePreloadComplete` across the `@Sendable` boundary of the
+    /// preload task. `@unchecked Sendable` is safe: the hook is read exactly
+    /// once, on the main actor, at the end of the preload.
+    private final class PreloadCompletion: @unchecked Sendable {
+        let onComplete: (() -> Void)?
+        init(_ onComplete: (() -> Void)?) {
+            self.onComplete = onComplete
+        }
+    }
+
+    /// Asynchronously seek the hidden player to `seekTime` and decode one warm
+    /// frame so the segment entry doesn't flash black.
+    ///
+    /// Uses the async AVFoundation APIs (`AVAsset.load`, `AVPlayer.seek`) and a
+    /// single `Task { @MainActor }` continuation instead of nested `@Sendable`
+    /// callbacks + `DispatchQueue.main.async` hops. Capturing the non-Sendable
+    /// `self`/`SourceOutput` across those hops is what produced the
+    /// "sending 'self'/'source' risks causing data races" errors.
     private func preloadSource(_ source: SourceOutput, seekTime: CMTime) {
-        let asset = source.item.asset
-        let keys = ["tracks", "duration", "playable"]
-        asset.loadValuesAsynchronously(forKeys: keys) { [weak source] in
-            DispatchQueue.main.async {
-                guard let source else { return }
-                guard !source.isInvalidated else { return }
+        let completion = PreloadCompletion(onSourcePreloadComplete)
+        Task { @MainActor [weak source] in
+            guard let source, !source.isInvalidated else { return }
 
-                source.output.requestNotificationOfMediaDataChange(withAdvanceInterval: 0.03)
-                source.player.seek(
-                    to: seekTime,
-                    toleranceBefore: .zero,
-                    toleranceAfter: CMTime(value: 1, timescale: 600)
-                ) { [weak source] _ in
-                    guard let source else { return }
-                    guard !source.isInvalidated else { return }
-                    source.output.requestNotificationOfMediaDataChange(withAdvanceInterval: 0.03)
+            // Wait for tracks/duration/playable metadata. Keep going on failure
+            // so `finishPreload` still runs (mirrors the old callback flow).
+            let asset = source.item.asset
+            _ = try? await asset.load(.tracks, .duration, .isPlayable)
+            guard !source.isInvalidated else { return }
 
-                    guard source.player.status == .readyToPlay else {
-                        self.finishPreloadSource(source, seekTime: seekTime)
-                        return
-                    }
+            source.output.requestNotificationOfMediaDataChange(withAdvanceInterval: 0.03)
+            _ = await source.player.seek(
+                to: seekTime,
+                toleranceBefore: .zero,
+                toleranceAfter: CMTime(value: 1, timescale: 600)
+            )
+            guard !source.isInvalidated else { return }
+            source.output.requestNotificationOfMediaDataChange(withAdvanceInterval: 0.03)
 
-                    self.prerollPreloadSource(source, seekTime: seekTime)
+            guard source.player.status == .readyToPlay else {
+                Self.finishPreload(source, seekTime: seekTime, completion: completion)
+                return
+            }
+
+            // `preroll` has no async variant, so bridge it with a continuation.
+            // Its completion captures only the (Sendable) continuation — no
+            // `self`/`source` — which is why this compiles cleanly under strict
+            // concurrency. The completion is invoked exactly once by AVFoundation.
+            await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+                source.player.preroll(atRate: 1.0) { _ in
+                    continuation.resume()
                 }
             }
+            guard !source.isInvalidated else { return }
+
+            Self.finishPreload(source, seekTime: seekTime, completion: completion)
         }
     }
 
-    private func prerollPreloadSource(_ source: SourceOutput, seekTime: CMTime) {
-        guard !source.isInvalidated else { return }
-        guard source.player.status == .readyToPlay else {
-            finishPreloadSource(source, seekTime: seekTime)
-            return
-        }
-
-        source.player.preroll(atRate: 1.0) { [weak self, weak source] _ in
-            DispatchQueue.main.async {
-                guard let self, let source else { return }
-                self.finishPreloadSource(source, seekTime: seekTime)
-            }
-        }
-    }
-
-    private func finishPreloadSource(_ source: SourceOutput, seekTime: CMTime) {
+    /// Pause the hidden player and capture one decoded frame at `seekTime` into
+    /// `source.lastFrame`, then fire the preload-complete hook.
+    private static func finishPreload(
+        _ source: SourceOutput,
+        seekTime: CMTime,
+        completion: PreloadCompletion
+    ) {
         guard !source.isInvalidated else { return }
         source.player.pause()
         source.output.requestNotificationOfMediaDataChange(withAdvanceInterval: 0.03)
@@ -1027,7 +1054,7 @@ public final class PreviewFrameProvider: VideoFrameProviderProtocol {
             let actualTime = displayTime.isValid ? displayTime : seekTime
             source.lastFrame = (actualTime, warmBuffer)
         }
-        onSourcePreloadComplete?()
+        completion.onComplete?()
     }
 
     public func frame(for spec: VideoLayerSpec, at compositionTime: CMTime) -> VideoFrameImage? {

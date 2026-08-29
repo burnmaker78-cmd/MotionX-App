@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		D02FEB142FF61A900099797A /* TimelineKitUIiOS in Frameworks */ = {isa = PBXBuildFile; productRef = D02FEB132FF61A900099797A /* TimelineKitUIiOS */; };
+		D02FEB162FF61A900099797A /* TimelineKitUIMac in Frameworks */ = {isa = PBXBuildFile; productRef = D02FEB172FF61A900099797A /* TimelineKitUIMac */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -28,6 +29,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				D02FEB142FF61A900099797A /* TimelineKitUIiOS in Frameworks */,
+				D02FEB162FF61A900099797A /* TimelineKitUIMac in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -79,6 +81,7 @@
 			name = VideoEditorDemo;
 			packageProductDependencies = (
 				D02FEB132FF61A900099797A /* TimelineKitUIiOS */,
+				D02FEB172FF61A900099797A /* TimelineKitUIMac */,
 			);
 			productName = VideoEditorDemo;
 			productReference = D02FE98A2FF4ECF20099797A /* VideoEditorDemo.app */;
@@ -380,6 +383,10 @@
 		D02FEB132FF61A900099797A /* TimelineKitUIiOS */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = TimelineKitUIiOS;
+		};
+		D02FEB172FF61A900099797A /* TimelineKitUIMac */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = TimelineKitUIMac;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

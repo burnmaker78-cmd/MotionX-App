@@ -101,6 +101,10 @@ let package = Package(
             name: "TimelineKitUISharedViewsTests",
             dependencies: ["TimelineKitUISharedViews", "TimelineKitRender"]
         ),
+        .testTarget(
+            name: "TimelineKitUIMacTests",
+            dependencies: ["TimelineKitUIMac", "TimelineKitUISharedViews", "TimelineKitRender"]
+        ),
 
         // MARK: - V8 Executable targets
         .executableTarget(

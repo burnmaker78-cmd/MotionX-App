@@ -5,6 +5,7 @@
 //  Created by xiaoyuan on 2026/7/1.
 //
 
+#if os(iOS)
 import SwiftUI
 import PhotosUI
 import UniformTypeIdentifiers
@@ -203,3 +204,5 @@ private enum DemoImportError: LocalizedError {
         Text("Requires iOS 18")
     }
 }
+
+#endif

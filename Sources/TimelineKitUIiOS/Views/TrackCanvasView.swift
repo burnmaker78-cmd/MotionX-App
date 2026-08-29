@@ -3,6 +3,7 @@ import UIKit
 import os
 import TimelineKitCore
 import TimelineKitRender
+import TimelineKitUISharedViews
 
 /// The core UIKit canvas that renders all tracks, segments, and the playhead.
 ///
@@ -425,48 +426,9 @@ final class TrackCanvasView: UIView {
 
 // MARK: - TrackLayout
 
-@MainActor
-struct TrackLayout {
-    let duration: Double
-    let pixelsPerSecond: CGFloat
-    let totalWidth: CGFloat
-
-    static let empty = TrackLayout(duration: 1, pixelsPerSecond: TrackCanvasView.minPixelsPerSecond)
-
-    static func fittedPPS(duration: Double, availableWidth: CGFloat) -> CGFloat {
-        // V5.1 BUG 2: 空 / 极短 timeline 不再硬膨胀为 0.1s（会把 pps 算成 availableWidth/0.1
-        // 几千的天文数字），直接走默认 pps。
-        if duration < 0.5 { return TrackCanvasView.defaultPixelsPerSecond }
-        return max(availableWidth / CGFloat(duration), TrackCanvasView.minPixelsPerSecond)
-    }
-
-    init(duration: Double, pixelsPerSecond: CGFloat) {
-        // V5.1 BUG 2: totalWidth 计算用 max(duration, 1.0) 兜底，避免空 timeline 时
-        // 内容宽度只有 ~6pt 看起来像「卡住」；self.duration 保留原值，让 ruler 等消费者
-        // 看到真实时间线长度。
-        let d   = max(duration, 0)
-        let pps = pixelsPerSecond.clamped(to: TrackCanvasView.minPixelsPerSecond...TrackCanvasView.maxPixelsPerSecond)
-        self.duration        = d
-        self.pixelsPerSecond = pps
-        self.totalWidth      = CGFloat(max(d, 1.0)) * pps + TrackCanvasView.leftPadding
-    }
-
-    func x(for time: Double) -> CGFloat {
-        TrackCanvasView.leftPadding + CGFloat(time) * pixelsPerSecond
-    }
-
-    func width(for duration: Double) -> CGFloat {
-        CGFloat(duration) * pixelsPerSecond
-    }
-
-    func time(at x: CGFloat) -> Double {
-        Double(max(0, x - TrackCanvasView.leftPadding)) / Double(pixelsPerSecond)
-    }
-
-    func timeDelta(for dx: CGFloat) -> Double {
-        Double(dx) / Double(pixelsPerSecond)
-    }
-}
+/// Shared time ↔ pixel math (extracted to TimelineKitUISharedViews so macOS
+/// and iOS render tracks with pixel-identical coordinates).
+typealias TrackLayout = TimelineTrackLayout
 
 // MARK: - RulerView
 

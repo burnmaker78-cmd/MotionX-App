@@ -10,8 +10,16 @@ import SwiftUI
 @main
 struct VideoEditorDemoApp: App {
     var body: some Scene {
+        #if os(iOS)
         WindowGroup {
-            ContentView()
+            VideoEditorView()
         }
+        #endif
+        #if os(macOS)
+        WindowGroup {
+            VideoEditorHostView()
+                .frame(minWidth: 1000, minHeight: 700)
+        }
+        #endif
     }
 }

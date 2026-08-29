@@ -1,26 +1,27 @@
 #if canImport(AppKit)
 import SwiftUI
+import AVFoundation
 import TimelineKitCore
 import TimelineKitRender
 import TimelineKitUIShared
 import TimelineKitUISharedViews
 
-/// Public entry point for the macOS clip editor (剪映 Mac 风格两区布局).
+/// Public entry point for the macOS clip editor (FCP-style four-zone layout).
 ///
-/// Layout (mirrors iOS `ClipEditorView` structure, adapted for macOS):
-///   Zone 1 — Preview : EditorPreviewView (top, flexible) + EditorControlBar playback controls
-///   Zone 2 — Timeline : AppKit track area (MacTimelineRepresentable — scroll/select/scrub/zoom)
+/// Layout:
+///   - Top toolbar (MacEditorToolbar): import / title / export placeholder
+///   - Vertical split: top area (Browser | Viewer | Inspector) over Timeline
+///   - Viewer reuses the shared SwiftUI preview + playback controls
+///   - Timeline uses the AppKit track canvas (scroll/select/scrub/zoom)
 ///
-/// The AppKit timeline canvas is hosted via NSViewRepresentable so the complex
-/// interaction surface (scroll, scrub, zoom, multi-row sync) keeps native
-/// fidelity — same rationale as iOS using UIKit for TrackCanvasView.
+/// The whole shell is an AppKit container (NSSplitView) hosted via
+/// NSViewRepresentable — draggable dividers and native split behavior come from
+/// AppKit, mirroring the rationale of iOS using UIKit for TrackCanvasView.
 public struct ClipEditorView: View {
     @State private var store: EditorStore
     @State private var coordinator = CompositionCoordinator()
     @State private var draftStore  = DraftStore()
     private let onDraftSave: ((UUID, EditorTimeline) -> Void)?
-
-    private let previewFraction: CGFloat = 0.52
 
     public init(
         store: EditorStore,
@@ -31,30 +32,14 @@ public struct ClipEditorView: View {
     }
 
     public var body: some View {
-        VStack(spacing: 0) {
-            // ── Zone 1: Preview + playback controls ──────────────────────────
-            VStack(spacing: 0) {
-                EditorPreviewView(
-                    store: store,
-                    compositionPlayer: coordinator.player,
-                    timelinePreviewView: coordinator.timelinePreviewView
-                )
-                .frame(maxWidth: .infinity)
-                .padding(.top, 8)
-
-                EditorControlBar(store: store)
-                    .frame(height: 52)
-                    .padding(.horizontal, 12)
-            }
-            .frame(maxHeight: .infinity)
-
-            Divider()
-                .background(Color.white.opacity(0.1))
-
-            // ── Zone 2: AppKit timeline ──────────────────────────────────────
-            MacTimelineRepresentable(store: store)
-                .frame(minHeight: 160, maxHeight: .infinity)
-        }
+        MacEditorShellRepresentable(
+            store: store,
+            compositionPlayer: coordinator.player,
+            timelinePreviewView: coordinator.timelinePreviewView
+        )
+        // NSView default intrinsicContentSize is noIntrinsicMetric; SwiftUI would
+        // otherwise size the AppKit shell to 0 height. Force it to fill.
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(white: 0.08))
         .onAppear {
             coordinator.attach(to: store)
@@ -75,6 +60,27 @@ public struct ClipEditorView: View {
         let timeline = store.timeline
         _ = DraftStore.save(timeline)
         onDraftSave?(draftID, timeline)
+    }
+}
+
+// MARK: - SwiftUI bridge
+
+/// Embeds the AppKit editor shell (NSSplitView four-zone layout) into SwiftUI.
+struct MacEditorShellRepresentable: NSViewRepresentable {
+    let store: EditorStore
+    let compositionPlayer: AVPlayer?
+    let timelinePreviewView: TimelinePreviewView?
+
+    func makeNSView(context: Context) -> MacEditorShellView {
+        MacEditorShellView(
+            store: store,
+            compositionPlayer: compositionPlayer,
+            timelinePreviewView: timelinePreviewView
+        )
+    }
+
+    func updateNSView(_ nsView: MacEditorShellView, context: Context) {
+        nsView.apply(timeline: store.timeline, selection: store.selection)
     }
 }
 

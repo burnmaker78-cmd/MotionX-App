@@ -19,6 +19,17 @@ public struct ServerTimelineSchema: Codable, Sendable {
     enum CodingKeys: String, CodingKey {
         case version, duration, fps, canvas, scenes, audio, subtitle, meta
     }
+    
+    public init(version: String, duration: Double, fps: Int, canvas: SCanvas, scenes: [SScene], audio: SAudioTrack? = nil, subtitle: SSubtitleTrack? = nil, meta: SMeta? = nil) {
+        self.version = version
+        self.duration = duration
+        self.fps = fps
+        self.canvas = canvas
+        self.scenes = scenes
+        self.audio = audio
+        self.subtitle = subtitle
+        self.meta = meta
+    }
 }
 
 // MARK: - Canvas
@@ -26,6 +37,11 @@ public struct ServerTimelineSchema: Codable, Sendable {
 public struct SCanvas: Codable, Sendable {
     public var width: Int
     public var height: Int
+    
+    public init(width: Int, height: Int) {
+        self.width = width
+        self.height = height
+    }
 }
 
 // MARK: - Scene

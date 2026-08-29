@@ -13,21 +13,25 @@ import TimelineKitUIShared
 import TimelineKitUIMac
 
 /// Landing view: pick media files, build a timeline, enter the macOS clip editor.
-struct VideoEditorHostView: View {
-    @State private var editorStore: EditorStore?
+struct VideoEditorView: View {
+    @State private var editorStore: EditorStore
     @State private var isImporting = false
     @State private var isShowingPicker = false
     @State private var errorMessage: String?
+    
+    init(editorStore: EditorStore? = nil) {
+        if let editorStore {
+            self.editorStore = editorStore
+        } else {
+            let timelineSchema = ServerTimelineSchema(version: "v1", duration: 0, fps: 30, canvas: SCanvas(width: 1920, height: 1080), scenes: [])
+            let timeline = TimelineImporter.importing(from: timelineSchema)
+            self.editorStore = EditorStore(timeline: timeline)
+        }
+    }
 
     var body: some View {
-        Group {
-            if let editorStore {
-                ClipEditorView(store: editorStore) { _, _ in
-                    // Draft already saved inside ClipEditorView; keep hook for future.
-                }
-            } else {
-                landingView
-            }
+        ClipEditorView(store: editorStore) { _, _ in
+            // Draft already saved inside ClipEditorView; keep hook for future.
         }
         .fileImporter(
             isPresented: $isShowingPicker,
@@ -51,43 +55,6 @@ struct VideoEditorHostView: View {
         }
     }
 
-    // MARK: - Landing
-
-    private var landingView: some View {
-        VStack(spacing: 18) {
-            Spacer()
-
-            Image(systemName: "film.stack")
-                .font(.system(size: 54, weight: .regular))
-                .foregroundStyle(.blue)
-
-            Text("TimelineKit Demo (macOS)")
-                .font(.title2.bold())
-
-            Text("Choose media files to create an editable timeline.")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-
-            Button {
-                isShowingPicker = true
-            } label: {
-                Label(isImporting ? "Importing..." : "Choose Media", systemImage: "photo.on.rectangle.angled")
-                    .font(.headline)
-            }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
-            .disabled(isImporting)
-
-            if isImporting {
-                ProgressView()
-                    .controlSize(.large)
-            }
-
-            Spacer()
-        }
-        .padding(40)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
 
     // MARK: - Import
 

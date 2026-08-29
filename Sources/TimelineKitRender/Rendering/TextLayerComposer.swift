@@ -1,5 +1,4 @@
 import TimelineKitCore
-#if canImport(UIKit)
 import CoreImage
 import CoreMedia
 import Foundation
@@ -132,4 +131,3 @@ public enum TextLayerComposer {
         return 1
     }
 }
-#endif

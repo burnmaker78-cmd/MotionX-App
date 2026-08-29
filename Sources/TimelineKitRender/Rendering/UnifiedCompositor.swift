@@ -1,5 +1,4 @@
 import TimelineKitCore
-#if canImport(UIKit)
 import AVFoundation
 import CoreImage
 import CoreMedia
@@ -560,4 +559,3 @@ print("[UC] t=\(t) imageLayers=\(instr.imageLayers.map { "z=\($0.zPosition) rang
         case badInstruction, missingFrame, noOutputBuffer
     }
 }
-#endif

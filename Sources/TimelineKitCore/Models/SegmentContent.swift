@@ -1,6 +1,8 @@
 import Foundation
 #if canImport(UIKit)
 import UIKit
+#elseif canImport(AppKit)
+import AppKit
 #endif
 
 /// Type-specific content carried by an EditorSegment.
@@ -271,6 +273,14 @@ public enum TextAlignment: String, Sendable, Hashable, Codable, CaseIterable {
     case trailing = "trailing"
 
     #if canImport(UIKit)
+    public var nsTextAlignment: NSTextAlignment {
+        switch self {
+        case .leading:  return .left
+        case .center:   return .center
+        case .trailing: return .right
+        }
+    }
+    #elseif canImport(AppKit)
     public var nsTextAlignment: NSTextAlignment {
         switch self {
         case .leading:  return .left

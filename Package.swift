@@ -80,6 +80,12 @@ let package = Package(
             dependencies: ["TimelineKitUIShared", "TimelineKitRender"]
         ),
 
+        // MARK: - V8 Test targets
+        .testTarget(
+            name: "TimelineKitRenderTests",
+            dependencies: ["TimelineKitCore", "TimelineKitRender"]
+        ),
+
         // MARK: - V8 Executable targets
         .executableTarget(
             name: "TimelineKitCLI",

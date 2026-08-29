@@ -1,5 +1,4 @@
 import TimelineKitCore
-#if canImport(UIKit)
 import CoreImage
 import CoreMedia
 import os.log
@@ -112,4 +111,3 @@ public enum AnimationComposer {
 
     private static func clamp01(_ v: Float) -> Float { max(0, min(1, v)) }
 }
-#endif

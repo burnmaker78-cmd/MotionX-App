@@ -27,6 +27,15 @@ public actor ThumbnailProvider {
 
     private let cache = NSCache<NSString, ThumbnailImage>()
 
+#if canImport(AppKit)
+    /// macOS memory-pressure watcher (DISPATCH_SOURCE_TYPE_MEMORYPRESSURE).
+    /// AppKit has no memory-warning notification on modern SDKs.
+    private let memoryPressureSource = DispatchSource.makeMemoryPressureSource(
+        eventMask: [.warning, .critical],
+        queue: .main
+    )
+#endif
+
     // MARK: - Generator pool (one per URL)
 
     private var generators: [URL: AVAssetImageGenerator] = [:]
@@ -52,6 +61,11 @@ public actor ThumbnailProvider {
         ) { [weak self] _ in
             Task { await self?.purge() }
         }
+#elseif canImport(AppKit)
+        memoryPressureSource.setEventHandler { [weak self] in
+            Task { await self?.purge() }
+        }
+        memoryPressureSource.resume()
 #endif
     }
 

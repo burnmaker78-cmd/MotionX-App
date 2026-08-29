@@ -1,5 +1,4 @@
 import TimelineKitCore
-#if canImport(UIKit)
 import Foundation
 import CoreImage
 import CoreMedia
@@ -215,4 +214,3 @@ public final class TimelineRenderer {
         return pb
     }
 }
-#endif

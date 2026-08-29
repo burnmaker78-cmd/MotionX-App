@@ -10,7 +10,5 @@ import Foundation
 public enum LayerContent: Sendable {
     case image(ImageLayerSpec)
     case video(VideoLayerSpec)
-#if canImport(UIKit)
     case text(TextLayerSpec)
-#endif
 }

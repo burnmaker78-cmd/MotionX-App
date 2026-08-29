@@ -1,9 +1,13 @@
 import TimelineKitCore
-#if canImport(UIKit)
 import AVFoundation
+import CoreImage
 import CoreMedia
 import CoreText
+#if canImport(UIKit)
 import UIKit
+#elseif canImport(AppKit)
+import AppKit
+#endif
 
 // MARK: - CompositionResult
 
@@ -1603,7 +1607,11 @@ enum SubtitleLayerBuilder {
         let textLayer = CATextLayer()
         textLayer.frame         = CGRect(x: padH, y: padV,
                                          width: textSize.width, height: textSize.height)
+#if canImport(UIKit)
         textLayer.contentsScale = UIScreen.main.scale
+#else
+        textLayer.contentsScale = 2
+#endif
         textLayer.isWrapped     = true
         textLayer.truncationMode = .none
         // alignmentMode is overridden by NSParagraphStyle inside the attributed
@@ -1904,7 +1912,8 @@ public enum SubtitleFrameBuilder {
         return drawFullCanvas(renderSize: renderSize) { ctx in
             // Background pill (no shadow — matches preview layer split).
             ctx.setFillColor(bgCGColor)
-            ctx.addPath(UIBezierPath(roundedRect: bgRect, cornerRadius: bgRadius).cgPath)
+            ctx.addPath(CGPath(roundedRect: bgRect, cornerWidth: bgRadius,
+                               cornerHeight: bgRadius, transform: nil))
             ctx.fillPath()
 
             // Text via CoreText with optional shadow (scoped via save/restore).
@@ -2014,7 +2023,8 @@ public enum SubtitleFrameBuilder {
             // Optional background
             if let bg = bgCGColor {
                 ctx.setFillColor(bg)
-                ctx.addPath(UIBezierPath(roundedRect: bgRect, cornerRadius: bgRadius).cgPath)
+                ctx.addPath(CGPath(roundedRect: bgRect, cornerWidth: bgRadius,
+                                   cornerHeight: bgRadius, transform: nil))
                 ctx.fillPath()
                 ctx.setFillColor(textColor)
             }
@@ -2201,6 +2211,7 @@ public enum SubtitleFrameBuilder {
     ) -> CIImage? {
         let supersample = Self.subtitleSupersampleScale
 
+#if canImport(UIKit)
         let format    = UIGraphicsImageRendererFormat()
         format.scale  = supersample
         format.opaque = false
@@ -2208,6 +2219,28 @@ public enum SubtitleFrameBuilder {
         let renderer = UIGraphicsImageRenderer(size: renderSize, format: format)
         let uiImage  = renderer.image { ctx in drawing(ctx.cgContext) }
         guard let cgImage = uiImage.cgImage else { return nil }
+#else
+        // macOS: CGContext bitmap with Y-down coordinate system matching UIKit.
+        let scaledW = Int(renderSize.width * supersample)
+        let scaledH = Int(renderSize.height * supersample)
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        guard let ctx = CGContext(
+            data: nil,
+            width: scaledW,
+            height: scaledH,
+            bitsPerComponent: 8,
+            bytesPerRow: 0,
+            space: colorSpace,
+            bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue
+        ) else { return nil }
+        // CGContext is Y-up; flip to Y-down (UIKit convention) then apply
+        // supersample scale so the drawing closure is in point space.
+        ctx.scaleBy(x: 1, y: -1)
+        ctx.translateBy(x: 0, y: -CGFloat(scaledH))
+        ctx.scaleBy(x: supersample, y: supersample)
+        drawing(ctx)
+        guard let cgImage = ctx.makeImage() else { return nil }
+#endif
 
         // Both CIImage(cgImage:) and CIImage(cvPixelBuffer:) map display-top to
         // CIImage Y = height-1, so no additional flip is needed when compositing.
@@ -2223,4 +2256,3 @@ public enum SubtitleFrameBuilder {
     }
 }
 
-#endif

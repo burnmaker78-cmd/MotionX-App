@@ -2,9 +2,6 @@ import TimelineKitCore
 import Foundation
 import CoreImage
 import CoreMedia
-#if canImport(UIKit)
-import UIKit
-#endif
 
 // MARK: - ImageLayerSpec
 

@@ -276,7 +276,6 @@ public enum LayerResolver {
                     }
                     guard containsText else { return nil }
 
-#if canImport(UIKit)
                     return .text(TextLayerSpec(
                         segmentID: seg.id,
                         timeRange: CMTimeRange(
@@ -286,9 +285,6 @@ public enum LayerResolver {
                         zPosition: Int32(seg.userZOrder ?? track.zPosition),
                         baseOpacity: Float(seg.transform.opacity)
                     ))
-#else
-                    return nil
-#endif
                 }
             }
 
@@ -383,11 +379,9 @@ public enum LayerResolver {
             case .video(let spec):
                 timeRange = spec.timeRange
                 zIdx = Int(spec.zPosition)
-#if canImport(UIKit)
             case .text(let spec):
                 timeRange = spec.timeRange
                 zIdx = Int(spec.zPosition)
-#endif
             }
             let os = timeRange.start.seconds
             let oe = os + timeRange.duration.seconds

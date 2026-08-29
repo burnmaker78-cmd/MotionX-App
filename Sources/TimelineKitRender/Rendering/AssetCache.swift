@@ -15,6 +15,16 @@ public final class AssetCache: @unchecked Sendable {
     private let cache = NSCache<NSString, AVURLAsset>()
     private let lock  = NSLock()
 
+#if canImport(AppKit)
+    /// macOS memory-pressure watcher. AppKit exposes no memory-warning
+    /// notification on modern SDKs, so use DISPATCH_SOURCE_TYPE_MEMORYPRESSURE
+    /// (available on both macOS and iOS).
+    private let memoryPressureSource = DispatchSource.makeMemoryPressureSource(
+        eventMask: [.warning, .critical],
+        queue: .main
+    )
+#endif
+
     private init() {
         cache.totalCostLimit = 20 * 1_024 * 1_024  // 20 MB (metadata only)
 #if canImport(UIKit)
@@ -24,6 +34,11 @@ public final class AssetCache: @unchecked Sendable {
             name: UIApplication.didReceiveMemoryWarningNotification,
             object: nil
         )
+#elseif canImport(AppKit)
+        memoryPressureSource.setEventHandler { [weak self] in
+            self?.memoryWarning()
+        }
+        memoryPressureSource.resume()
 #endif
     }
 

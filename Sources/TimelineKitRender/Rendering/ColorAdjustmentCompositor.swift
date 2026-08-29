@@ -1,5 +1,4 @@
 import TimelineKitCore
-#if canImport(UIKit)
 import AVFoundation
 import CoreImage
 import CoreMedia
@@ -139,4 +138,3 @@ final class ColorAdjustmentCompositor: NSObject, AVVideoCompositing {
         case badInstruction, missingSourceFrame, noOutputBuffer
     }
 }
-#endif

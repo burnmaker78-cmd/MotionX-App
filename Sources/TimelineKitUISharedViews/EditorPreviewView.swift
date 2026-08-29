@@ -1,19 +1,29 @@
-#if canImport(UIKit)
 import SwiftUI
 import AVFoundation
 import CoreText
 import TimelineKitCore
 import TimelineKitRender
 import TimelineKitUIShared
+#if canImport(UIKit)
+import UIKit
+#elseif canImport(AppKit)
+import AppKit
+#endif
 
-struct EditorPreviewView: View {
-    @Bindable var store: EditorStore
+public struct EditorPreviewView: View {
+    @Bindable public var store: EditorStore
     /// When set, this player is used instead of store.player (composition-based preview).
-    var compositionPlayer: AVPlayer? = nil
+    public var compositionPlayer: AVPlayer? = nil
     /// TimelinePreviewView from CompositionCoordinator (set by umbrella layer).
-    var timelinePreviewView: TimelinePreviewView? = nil
+    public var timelinePreviewView: TimelinePreviewView? = nil
+    
+    public init(store: EditorStore, compositionPlayer: AVPlayer? = nil, timelinePreviewView: TimelinePreviewView? = nil) {
+        self.store = store
+        self.compositionPlayer = compositionPlayer
+        self.timelinePreviewView = timelinePreviewView
+    }
 
-    var body: some View {
+    public var body: some View {
         ZStack {
             // V6 P1 (Stage 1-2): For image-only timelines the Timeline Runtime
             // renders directly into `TimelinePreviewView`, bypassing AVVideoCompositing.
@@ -311,6 +321,7 @@ private func resolveSwiftUIFont(
     // italic variant. Slant 0.2 ≈ 11° matches CapCut / 剪映 visual.
     // a=1, d=1 means no scaling; c=0.2 means horizontal shear only.
     let shear = CGAffineTransform(a: 1, b: 0, c: 0.2, d: 1, tx: 0, ty: 0)
+#if canImport(UIKit)
     let baseDescriptor = UIFontDescriptor(name: postScript, size: size)
     let italicDescriptor = baseDescriptor.addingAttributes([
         .matrix: NSValue(cgAffineTransform: shear)
@@ -319,6 +330,18 @@ private func resolveSwiftUIFont(
     // collapse the glyphs to 1pt.
     let uiFont = UIFont(descriptor: italicDescriptor, size: size)
     return Font(uiFont)
+#else
+    let baseDescriptor = NSFontDescriptor(name: postScript, size: size)
+    // NSValue(cgAffineTransform:) is UIKit-only; construct via bytes on macOS.
+    var shearCopy = shear
+    let matrixValue = NSValue(bytes: &shearCopy, objCType: "{CGAffineTransform=dddddd}")
+    let italicDescriptor = baseDescriptor.addingAttributes([
+        .matrix: matrixValue
+    ])
+    let nsFont: NSFont = NSFont(descriptor: italicDescriptor, size: size)
+        ?? NSFont.systemFont(ofSize: size)
+    return Font(nsFont)
+#endif
 }
 
 // MARK: - Shared text-stroke modifier (v3 P4 / v4 text-style-fidelity-spec §4)
@@ -675,7 +698,7 @@ private struct SubtitleStackView: View {
 // MARK: - Color Hex helper
 
 extension Color {
-    init?(hex: String) {
+    public init?(hex: String) {
         let h = hex.trimmingCharacters(in: .init(charactersIn: "#"))
         guard h.count == 6 || h.count == 8 else { return nil }
         var int: UInt64 = 0
@@ -723,4 +746,3 @@ private extension Double {
         Swift.min(Swift.max(self, range.lowerBound), range.upperBound)
     }
 }
-#endif

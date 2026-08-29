@@ -2,6 +2,7 @@
 import SwiftUI
 import AVFoundation
 import TimelineKitRender
+import TimelineKitUISharedViews
 
 // MARK: - VideoTrimSelectorSheet
 

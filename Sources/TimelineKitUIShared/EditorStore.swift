@@ -50,9 +50,7 @@ public final class EditorStore: @MainActor Identifiable {
     public var isPlaying: Bool = false
     public var usesTimelineRuntime: Bool = false
 
-#if canImport(UIKit)
     @ObservationIgnored nonisolated(unsafe) public weak var coordinator: (any TimelineCoordinatorProtocol)?
-#endif
 
     @ObservationIgnored nonisolated(unsafe) private var playerTimeObserver: Any?
     @ObservationIgnored nonisolated(unsafe) private var playerEndObserver: Any?
@@ -64,9 +62,7 @@ public final class EditorStore: @MainActor Identifiable {
         self.document = TimelineDocument(timeline: timeline)
         // Wire coordinator callbacks
         document.onDidMutateSubtitle = { [weak self] tl in
-#if canImport(UIKit)
             self?.coordinator?.refreshTimelineRuntimeTextLayers(timeline: tl)
-#endif
         }
         if let url = videoURL { setupPlayer(url: url) }
     }
@@ -88,18 +84,12 @@ public final class EditorStore: @MainActor Identifiable {
 
     public func play() {
         guard let p = activePlayer else { return }
-#if canImport(UIKit)
         coordinator?.setTimelineRuntimePlaybackActive(true)
-#endif
         if p.currentTime().seconds >= timeline.duration - 0.05 {
-#if canImport(UIKit)
             coordinator?.prepareTimelineRuntimeForSeek(to: .zero)
-#endif
             p.seek(to: .zero, toleranceBefore: .zero, toleranceAfter: .zero)
             DispatchQueue.main.async {
-#if canImport(UIKit)
                 self.coordinator?.renderFrameAndFlush()
-#endif
             }
         }
         p.play(); isPlaying = true
@@ -107,23 +97,17 @@ public final class EditorStore: @MainActor Identifiable {
 
     public func pause() {
         activePlayer?.pause(); isPlaying = false
-#if canImport(UIKit)
         coordinator?.setTimelineRuntimePlaybackActive(false)
-#endif
     }
 
     public func seek(to time: Double) {
         let clamped = max(0, min(time, timeline.duration))
         let cmTime = CMTime(seconds: clamped, preferredTimescale: 600)
-#if canImport(UIKit)
         coordinator?.setTimelineRuntimePlaybackActive(isPlaying)
         coordinator?.prepareTimelineRuntimeForSeek(to: cmTime)
-#endif
         activePlayer?.seek(to: cmTime, toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] _ in
             DispatchQueue.main.async {
-#if canImport(UIKit)
                 self?.coordinator?.renderFrameAndFlush()
-#endif
             }
         }
         selection.playheadTime = clamped
@@ -185,34 +169,26 @@ public final class EditorStore: @MainActor Identifiable {
         timeline.updateSegment(id: segmentID) { seg in
             guard case .text(var c) = seg.content else { return }; c.style.fontSize = fontSize; seg.content = .text(c)
         }
-#if canImport(UIKit)
         coordinator?.refreshTimelineRuntimeTextLayers(timeline: timeline)
-#endif
     }
 
     public func previewTextPosition(segmentID: UUID, position: NormalizedPoint) {
         timeline.updateSegment(id: segmentID) { seg in
             guard case .text(var c) = seg.content else { return }; c.position = position; seg.content = .text(c)
         }
-#if canImport(UIKit)
         coordinator?.refreshTimelineRuntimeTextLayers(timeline: timeline)
-#endif
     }
 
     public func previewSubtitleText(segmentID: UUID, text: String) {
         timeline.updateSegment(id: segmentID) { seg in
             guard case .subtitle(var c) = seg.content else { return }; c.text = text; seg.content = .subtitle(c)
         }
-#if canImport(UIKit)
         coordinator?.refreshTimelineRuntimeTextLayers(timeline: timeline)
-#endif
     }
 
     public func previewSubtitlePosition(segmentID: UUID, positionY: Double) {
         document.previewSubtitlePosition(segmentID: segmentID, positionY: positionY)
-#if canImport(UIKit)
         coordinator?.refreshTimelineRuntimeTextLayers(timeline: timeline)
-#endif
     }
 
     // MARK: - Style Preset

@@ -24,6 +24,10 @@ let package = Package(
             targets: ["TimelineKitUIShared"]
         ),
         .library(
+            name: "TimelineKitUISharedViews",
+            targets: ["TimelineKitUISharedViews"]
+        ),
+        .library(
             name: "TimelineKitUIiOS",
             targets: ["TimelineKitUIiOS"]
         ),
@@ -70,20 +74,32 @@ let package = Package(
             dependencies: ["TimelineKitCore", "TimelineKitRender"]
         ),
 
+        // MARK: - V8 Shared SwiftUI views (cross-platform editor UI)
+        // 预览链路 + 纯 SwiftUI 面板：iOS / macOS 共用。
+        // 依赖 UIShared（纯逻辑）而非反向，避免循环依赖。
+        .target(
+            name: "TimelineKitUISharedViews",
+            dependencies: ["TimelineKitUIShared", "TimelineKitRender"]
+        ),
+
         // MARK: - V8 Platform UI targets
         .target(
             name: "TimelineKitUIiOS",
-            dependencies: ["TimelineKitUIShared", "TimelineKitRender"]
+            dependencies: ["TimelineKitUIShared", "TimelineKitUISharedViews", "TimelineKitRender"]
         ),
         .target(
             name: "TimelineKitUIMac",
-            dependencies: ["TimelineKitUIShared", "TimelineKitRender"]
+            dependencies: ["TimelineKitUIShared", "TimelineKitUISharedViews", "TimelineKitRender"]
         ),
 
         // MARK: - V8 Test targets
         .testTarget(
             name: "TimelineKitRenderTests",
             dependencies: ["TimelineKitCore", "TimelineKitRender"]
+        ),
+        .testTarget(
+            name: "TimelineKitUISharedViewsTests",
+            dependencies: ["TimelineKitUISharedViews", "TimelineKitRender"]
         ),
 
         // MARK: - V8 Executable targets
@@ -105,6 +121,7 @@ let package = Package(
                 "TimelineKitCore",
                 "TimelineKitRender",
                 "TimelineKitUIShared",
+                "TimelineKitUISharedViews",
                 "TimelineKitUIiOS",
             ]
         ),

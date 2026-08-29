@@ -1,10 +1,13 @@
 import TimelineKitCore
-#if canImport(UIKit)
 import AVFoundation
-import UIKit
 import CoreImage
 import CoreMedia
 import TimelineKitRender
+#if canImport(UIKit)
+import UIKit
+#elseif canImport(AppKit)
+import AppKit
+#endif
 
 /// V5 fullscreen-preview-spec §3：同源全屏预览的播放控制器。
 ///
@@ -20,7 +23,7 @@ final class FullScreenPreviewController {
     // MARK: - Public state (Observable)
 
     private(set) var isReady: Bool = false
-    private(set) var firstFrameImage: UIImage?      // loading 占位首帧
+    private(set) var firstFrameImage: CGImage?      // loading 占位首帧
     private(set) var duration: Double = 0
     private(set) var currentTime: Double = 0
     private(set) var isPlaying: Bool = false
@@ -228,13 +231,13 @@ final class FullScreenPreviewController {
 
     // MARK: - Private
 
-    private func generateFirstFrame(result: CompositionResult) async -> UIImage? {
+    private func generateFirstFrame(result: CompositionResult) async -> CGImage? {
         let generator = AVAssetImageGenerator(asset: result.composition)
         generator.videoComposition = result.videoComposition
         generator.appliesPreferredTrackTransform = true
         let time = CMTime(seconds: 0, preferredTimescale: 600)
         return await Task.detached {
-            (try? generator.copyCGImage(at: time, actualTime: nil)).map(UIImage.init(cgImage:))
+            try? generator.copyCGImage(at: time, actualTime: nil)
         }.value
     }
 
@@ -242,13 +245,13 @@ final class FullScreenPreviewController {
     private func generateCoverFromRenderer(
         timeline: EditorTimeline,
         canvasSize: CGSize
-    ) async -> UIImage? {
+    ) async -> CGImage? {
         guard let renderer = timelineRenderer else { return nil }
         guard let pb = renderer.renderFrame(at: 0) else { return nil }
         let ciImage = CIImage(cvPixelBuffer: pb)
         let ctx = CIContext()
         guard let cgImage = ctx.createCGImage(ciImage, from: ciImage.extent) else { return nil }
-        return UIImage(cgImage: cgImage)
+        return cgImage
     }
 
     // MARK: - Timeline Runtime
@@ -385,8 +388,13 @@ final class FullScreenPreviewController {
     }
 
     private func setupForegroundObserver() {
+#if canImport(UIKit)
+        let name: Notification.Name = UIApplication.didBecomeActiveNotification
+#else
+        let name: Notification.Name = NSApplication.didBecomeActiveNotification
+#endif
         foregroundObserver = NotificationCenter.default.addObserver(
-            forName: UIApplication.didBecomeActiveNotification,
+            forName: name,
             object: nil,
             queue: .main
         ) { [weak self] _ in
@@ -450,4 +458,3 @@ final class FullScreenPreviewController {
         }
     }
 }
-#endif

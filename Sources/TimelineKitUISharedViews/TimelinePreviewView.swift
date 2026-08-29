@@ -1,16 +1,23 @@
-#if canImport(UIKit)
-import UIKit
 import AVFoundation
 import CoreMedia
 import CoreVideo
 import SwiftUI
+#if canImport(UIKit)
+import UIKit
+#elseif canImport(AppKit)
+import AppKit
+#endif
 
 // MARK: - TimelinePreviewView
 
-/// UIView that displays rendered `CVPixelBuffer` frames using `AVSampleBufferDisplayLayer`.
+/// Platform view that displays rendered `CVPixelBuffer` frames using `AVSampleBufferDisplayLayer`.
 ///
 /// Used by the Timeline Runtime (V6 P1 — Stage 1-2) to present image-layer
 /// composites at screen refresh rate, bypassing AVVideoCompositing entirely.
+///
+/// iOS: `UIView` subclass; macOS: `NSView` subclass. The display logic
+/// (`AVSampleBufferDisplayLayer` + CMSampleBuffer factory) is shared verbatim —
+/// only the platform base class and layout hook differ.
 ///
 /// Usage:
 /// ```swift
@@ -19,7 +26,7 @@ import SwiftUI
 /// view.enqueue(pixelBuffer, presentationTime: cmTime)
 /// ```
 @MainActor
-public final class TimelinePreviewView: UIView {
+public final class TimelinePreviewView: TimelinePreviewPlatformView {
 
     // MARK: - Display layer
 
@@ -51,13 +58,20 @@ public final class TimelinePreviewView: UIView {
     }
 
     private func setup() {
+        sampleBufferLayer.videoGravity    = .resizeAspect
+        sampleBufferLayer.contentsGravity = .resizeAspect
+#if canImport(UIKit)
         backgroundColor = .black
-        sampleBufferLayer.videoGravity          = .resizeAspect
-        sampleBufferLayer.backgroundColor       = UIColor.black.cgColor
-        sampleBufferLayer.contentsGravity       = .resizeAspect
+        sampleBufferLayer.backgroundColor = UIColor.black.cgColor
         layer.addSublayer(sampleBufferLayer)
+#else
+        wantsLayer = true
+        layer?.backgroundColor = NSColor.black.cgColor
+        layer?.addSublayer(sampleBufferLayer)
+#endif
     }
 
+#if canImport(UIKit)
     public override func layoutSubviews() {
         super.layoutSubviews()
         CATransaction.begin()
@@ -65,6 +79,15 @@ public final class TimelinePreviewView: UIView {
         sampleBufferLayer.frame = bounds
         CATransaction.commit()
     }
+#else
+    public override func layout() {
+        super.layout()
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        sampleBufferLayer.frame = bounds
+        CATransaction.commit()
+    }
+#endif
 
     // MARK: - Public API
 
@@ -199,6 +222,7 @@ public final class TimelinePreviewView: UIView {
 
 // MARK: - SwiftUI Representable
 
+#if canImport(UIKit)
 /// Wraps `TimelinePreviewView` for embedding in SwiftUI hierarchies.
 struct TimelinePreviewRepresentable: UIViewRepresentable {
     let previewView: TimelinePreviewView
@@ -211,5 +235,25 @@ struct TimelinePreviewRepresentable: UIViewRepresentable {
         // No-op: the view is driven imperatively via enqueue(_:presentationTime:).
     }
 }
+#else
+/// Wraps `TimelinePreviewView` for embedding in SwiftUI hierarchies.
+struct TimelinePreviewRepresentable: NSViewRepresentable {
+    let previewView: TimelinePreviewView
 
+    func makeNSView(context: Context) -> TimelinePreviewView {
+        previewView
+    }
+
+    func updateNSView(_ nsView: TimelinePreviewView, context: Context) {
+        // No-op: the view is driven imperatively via enqueue(_:presentationTime:).
+    }
+}
+#endif
+
+// MARK: - Platform base type
+
+#if canImport(UIKit)
+public typealias TimelinePreviewPlatformView = UIView
+#else
+public typealias TimelinePreviewPlatformView = NSView
 #endif

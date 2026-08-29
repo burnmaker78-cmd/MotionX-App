@@ -1,8 +1,12 @@
-#if canImport(UIKit)
 import SwiftUI
 import AVFoundation
 import TimelineKitCore
 import TimelineKitUIShared
+#if canImport(UIKit)
+import UIKit
+#elseif canImport(AppKit)
+import AppKit
+#endif
 
 /// V5 fullscreen-preview-spec §3：同源全屏真实预览的 SwiftUI 容器。
 ///
@@ -11,7 +15,7 @@ import TimelineKitUIShared
 ///
 /// 字幕、描边、阴影、背景、层级 5 类样式均走与导出同一条 CIImage/CALayer 烘焙路径，
 /// 解决"预览 ≠ 成片"痛点。
-struct FullScreenPreviewView: View {
+public struct FullScreenPreviewView: View {
 
     let timeline: EditorTimeline
 
@@ -22,7 +26,12 @@ struct FullScreenPreviewView: View {
     @State private var controller = FullScreenPreviewController()
     @State private var isScrubbing = false
 
-    var body: some View {
+    public init(timeline: EditorTimeline, onDismiss: @escaping (CMTime) -> Void) {
+        self.timeline = timeline
+        self.onDismiss = onDismiss
+    }
+
+    public var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
 
@@ -60,8 +69,10 @@ struct FullScreenPreviewView: View {
                 controller.play()
             }
         }
+#if canImport(UIKit)
         .statusBarHidden(true)
         .persistentSystemOverlays(.hidden)
+#endif
     }
 
     // MARK: - Subviews
@@ -78,7 +89,7 @@ struct FullScreenPreviewView: View {
             }
         } else if let img = controller.firstFrameImage {
             // 首帧占位（用导出同源帧），避免黑屏
-            Image(uiImage: img)
+            Image(decorative: img, scale: 1)
                 .resizable()
                 .aspectRatio(contentMode: .fit)
         }
@@ -194,4 +205,3 @@ struct FullScreenPreviewView: View {
         return String(format: "%d:%02d", m, s)
     }
 }
-#endif

@@ -1,9 +1,8 @@
-#if canImport(UIKit)
 import SwiftUI
 import TimelineKitUIShared
 
 /// Playback controls and tool mode switcher shown between preview and track area.
-struct EditorControlBar: View {
+public struct EditorControlBar: View {
     var store: EditorStore
 
     /// V5 fullscreen-preview-spec §3.4：全屏预览按钮触发回调。由 ClipEditorView
@@ -11,7 +10,12 @@ struct EditorControlBar: View {
     /// `FullScreenPreviewView`。本视图仅负责发起请求。
     var onRequestFullScreenPreview: () -> Void = {}
 
-    var body: some View {
+    public init(store: EditorStore, onRequestFullScreenPreview: @escaping () -> Void = {}) {
+        self.store = store
+        self.onRequestFullScreenPreview = onRequestFullScreenPreview
+    }
+
+    public var body: some View {
         HStack(spacing: 0) {
             Spacer()
 
@@ -96,4 +100,3 @@ struct EditorControlBar: View {
         }
     }
 }
-#endif

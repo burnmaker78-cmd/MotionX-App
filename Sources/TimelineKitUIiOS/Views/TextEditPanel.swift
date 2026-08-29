@@ -2,6 +2,7 @@
 import SwiftUI
 import TimelineKitCore
 import TimelineKitUIShared
+import TimelineKitUISharedViews
 
 // MARK: - TextEditPanel
 

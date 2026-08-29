@@ -1,10 +1,13 @@
 import TimelineKitCore
 import TimelineKitRender
 import TimelineKitUIShared
-#if canImport(UIKit)
 import AVFoundation
 import CoreMedia
+#if canImport(UIKit)
 import UIKit
+#elseif canImport(AppKit)
+import AppKit
+#endif
 
 /// Owns the AVPlayer for the clip editor and keeps it in sync with EditorTimeline.
 ///
@@ -34,7 +37,7 @@ public final class CompositionCoordinator {
 
     // MARK: - Internal
 
-    let player = AVPlayer()
+    public let player = AVPlayer()
     private let builder = CompositionBuilder()
     private weak var store: EditorStore?
 
@@ -83,7 +86,7 @@ public final class CompositionCoordinator {
     // MARK: - Attach to store
 
     /// Connect to an EditorStore.  Call once after creating the coordinator.
-    func attach(to store: EditorStore) {
+    public func attach(to store: EditorStore) {
         self.store = store
     }
 
@@ -93,7 +96,7 @@ public final class CompositionCoordinator {
     /// - Parameters:
     ///   - timeline: snapshot of the current EditorTimeline
     ///   - immediate: skip the 300 ms debounce (use for first build / track additions)
-    func scheduleRebuild(timeline: EditorTimeline, immediate: Bool = false) {
+    public func scheduleRebuild(timeline: EditorTimeline, immediate: Bool = false) {
         pendingTask?.cancel()
         let delay: UInt64 = immediate ? 0 : 300_000_000  // nanoseconds
 
@@ -318,7 +321,7 @@ public final class CompositionCoordinator {
     /// the editor's render loop and the fullscreen's render loop compete for
     /// frames through the same global provider, producing freezes/black frames
     /// while the fullscreen warm-up runs.
-    func suspendTimelineRuntime() {
+    public func suspendTimelineRuntime() {
         timelineClock?.stop()
         pendingDeferredSeekRender?.cancel()
         pendingDeferredSeekRender = nil
@@ -331,7 +334,7 @@ public final class CompositionCoordinator {
 
     /// Re-acquire the global provider and restart the render loop after a
     /// previous `suspendTimelineRuntime()` call. Idempotent.
-    func resumeTimelineRuntime() {
+    public func resumeTimelineRuntime() {
         guard store?.usesTimelineRuntime == true,
               timelineRenderer != nil
         else { return }
@@ -535,8 +538,13 @@ public final class CompositionCoordinator {
     }
 
     private func setupForegroundObserver() {
+#if canImport(UIKit)
+        let name: Notification.Name = UIApplication.didBecomeActiveNotification
+#else
+        let name: Notification.Name = NSApplication.didBecomeActiveNotification
+#endif
         foregroundObserver = NotificationCenter.default.addObserver(
-            forName: UIApplication.didBecomeActiveNotification,
+            forName: name,
             object: nil,
             queue: .main
         ) { [weak self] _ in
@@ -590,10 +598,7 @@ public final class CompositionCoordinator {
         }
     }
 }
-#endif
 
 // MARK: - TimelineCoordinatorProtocol conformance
 
-#if canImport(UIKit)
 extension CompositionCoordinator: TimelineCoordinatorProtocol {}
-#endif

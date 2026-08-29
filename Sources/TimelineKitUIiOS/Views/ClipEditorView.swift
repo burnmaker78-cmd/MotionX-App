@@ -5,6 +5,7 @@ import AVFoundation
 import TimelineKitCore
 import TimelineKitRender
 import TimelineKitUIShared
+import TimelineKitUISharedViews
 
 /// Public entry point for the clip editor.
 /// Three-layer architecture (locked):

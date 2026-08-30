@@ -58,13 +58,12 @@ public final class EditorStore: @MainActor Identifiable {
 
     // MARK: - Init
 
-    public init(timeline: EditorTimeline, videoURL: URL? = nil) {
+    public init(timeline: EditorTimeline) {
         self.document = TimelineDocument(timeline: timeline)
         // Wire coordinator callbacks
         document.onDidMutateSubtitle = { [weak self] tl in
             self?.coordinator?.refreshTimelineRuntimeTextLayers(timeline: tl)
         }
-        if let url = videoURL { setupPlayer(url: url) }
     }
 
     deinit {
@@ -96,7 +95,8 @@ public final class EditorStore: @MainActor Identifiable {
     }
 
     public func pause() {
-        activePlayer?.pause(); isPlaying = false
+        activePlayer?.pause()
+        isPlaying = false
         coordinator?.setTimelineRuntimePlaybackActive(false)
     }
 
@@ -210,11 +210,20 @@ public final class EditorStore: @MainActor Identifiable {
 
     // MARK: - Track Management
 
-    @discardableResult public func addTrack(kind: EditorTrack.Kind, label: String = "", zPosition: Int? = nil, pendingUserCreated: Bool = false) -> UUID? { document.addTrack(kind: kind, label: label, zPosition: zPosition, pendingUserCreated: pendingUserCreated) }
-    public func addSegment(toTrack trackID: UUID, segment: EditorSegment) { document.addSegment(toTrack: trackID, segment: segment) }
-    @discardableResult public func addSegmentAutoTrack(kind: EditorTrack.Kind, segment: EditorSegment) -> UUID? { document.addSegmentAutoTrack(kind: kind, segment: segment) }
-    public func removeTrackIfEmpty(id: UUID) { document.removeTrackIfEmpty(id: id) }
-    public func setTrackLocked(id: UUID, isLocked: Bool) { document.setTrackLocked(id: id, isLocked: isLocked) }
+    @discardableResult public func addTrack(kind: EditorTrack.Kind, label: String = "", zPosition: Int? = nil, pendingUserCreated: Bool = false) -> UUID? {
+        document.addTrack(kind: kind, label: label, zPosition: zPosition, pendingUserCreated: pendingUserCreated)
+    }
+    public func addSegment(toTrack trackID: UUID, segment: EditorSegment) {
+        document.addSegment(toTrack: trackID, segment: segment)
+    }
+    @discardableResult public func addSegmentAutoTrack(kind: EditorTrack.Kind, segment: EditorSegment) -> UUID? { document.addSegmentAutoTrack(kind: kind, segment: segment)
+    }
+    public func removeTrackIfEmpty(id: UUID) {
+        document.removeTrackIfEmpty(id: id)
+    }
+    public func setTrackLocked(id: UUID, isLocked: Bool) {
+        document.setTrackLocked(id: id, isLocked: isLocked)
+    }
     public func setTrackHidden(id: UUID, isHidden: Bool) {
         guard let track = timeline.track(id: id), !track.isMainTrack else { return }
         document.setTrackHidden(id: id, isHidden: isHidden)
@@ -309,20 +318,40 @@ public final class EditorStore: @MainActor Identifiable {
         let segmentID = UUID(); let playheadTime = selection.playheadTime
         mutate("添加素材") { tl in
             let trackIndex: Int?
-            if let targetTrackID { trackIndex = tl.tracks.firstIndex { $0.id == targetTrackID && !$0.isMainTrack && $0.kind == .overlay } }
-            else { trackIndex = tl.tracks.firstIndex(where: { $0.isMainTrack }) }
-            guard let ti = trackIndex else { return }
-            let materialID = UUID(); let isVideo = nativeDuration != nil
+            if let targetTrackID {
+                trackIndex = tl.tracks.firstIndex { $0.id == targetTrackID && !$0.isMainTrack && $0.kind == .overlay }
+            } else {
+                trackIndex = tl.tracks.firstIndex(where: { $0.isMainTrack })
+            }
+            // 空 timeline 无主轨时兜底：自动创建一条主轨，避免 add 直接失效。
+            // （importing(from:) 对空场景会过滤掉空轨道，导致无 isMainTrack 轨道。）
+            let ti: Int
+            if let idx = trackIndex {
+                ti = idx
+            } else {
+                let mainTrack = EditorTrack(id: UUID(), kind: .video, label: "视频", zPosition: 0, isMainTrack: true)
+                tl.tracks.append(mainTrack)
+                ti = tl.tracks.count - 1
+            }
+            let materialID = UUID()
+            let isVideo = nativeDuration != nil
             let asset = EditorAsset(id: materialID, type: isVideo ? .video : .image, localURL: localURL, nativeDuration: nativeDuration)
             tl.materials[materialID] = asset
             let insertStart = targetTrackID == nil ? (tl.tracks[ti].segments.last?.targetRange.end ?? 0) : playheadTime
             let dur = nativeDuration ?? 3.0
             let segment = EditorSegment(id: segmentID, materialID: materialID, sourceRange: isVideo ? TimeRange(start: 0, duration: dur) : nil, targetRange: TimeRange(start: insertStart, duration: dur), speed: 1.0, content: isVideo ? .video(SegmentContent.VideoContent()) : .image(SegmentContent.ImageContent()))
-            tl.tracks[ti].insert(segment); if tl.tracks[ti].pendingUserCreated { tl.tracks[ti].pendingUserCreated = false }
+            tl.tracks[ti].insert(segment)
+            if tl.tracks[ti].pendingUserCreated {
+                tl.tracks[ti].pendingUserCreated = false
+            }
         }
         if timeline.segment(id: segmentID) != nil {
-            if let targetTrackID { document.cancelPendingCleanup(for: targetTrackID) }
-            if targetTrackID != nil { selection.selectOnly(segmentID) }
+            if let targetTrackID {
+                document.cancelPendingCleanup(for: targetTrackID)
+            }
+            if targetTrackID != nil {
+                selection.selectOnly(segmentID)
+            }
             return segmentID
         }
         return nil
@@ -334,9 +363,15 @@ public final class EditorStore: @MainActor Identifiable {
         let segment = EditorSegment(id: segmentID, materialID: assetID, sourceRange: TimeRange(start: 0, duration: nativeDuration), targetRange: TimeRange(start: startTime ?? selection.playheadTime, duration: nativeDuration), content: .audio(SegmentContent.AudioContent(volume: 1.0, ttsSource: ttsSource)))
         timeline.materials.add(asset)
         let hostTrackID: UUID?
-        if let targetTrackID, timeline.track(id: targetTrackID)?.kind == .audio { addSegment(toTrack: targetTrackID, segment: segment); hostTrackID = targetTrackID }
-        else { hostTrackID = addSegmentAutoTrack(kind: .audio, segment: segment) }
-        guard hostTrackID != nil else { timeline.materials.remove(id: assetID); return nil }
+        if let targetTrackID, timeline.track(id: targetTrackID)?.kind == .audio {
+            addSegment(toTrack: targetTrackID, segment: segment); hostTrackID = targetTrackID
+        } else {
+            hostTrackID = addSegmentAutoTrack(kind: .audio, segment: segment)
+        }
+        guard hostTrackID != nil else {
+            timeline.materials.remove(id: assetID)
+            return nil
+        }
         return segmentID
     }
 

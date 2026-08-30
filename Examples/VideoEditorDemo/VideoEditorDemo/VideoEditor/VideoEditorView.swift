@@ -117,7 +117,7 @@ struct VideoEditorView: View {
                 productName: "VideoEditorDemo"
             )
             await MainActor.run {
-                editorStore = EditorStore(timeline: timeline, videoURL: nil)
+                editorStore = EditorStore(timeline: timeline)
             }
         } catch {
             await MainActor.run {

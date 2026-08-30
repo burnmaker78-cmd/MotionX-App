@@ -447,13 +447,28 @@ public enum TimelineImporter {
 
         // Only include non-empty tracks
         var tracks: [EditorTrack] = []
-        if !overlayTrack.segments.isEmpty  { tracks.append(overlayTrack) }
-        if !videoTrack.segments.isEmpty    { tracks.append(videoTrack) }
-        if !textTrack.segments.isEmpty     { tracks.append(textTrack) }
-        if !subtitleTrack.segments.isEmpty { tracks.append(subtitleTrack) }
-        if !voiceTrack.segments.isEmpty    { tracks.append(voiceTrack) }
-        if !bgmTrack.segments.isEmpty      { tracks.append(bgmTrack) }
-        if !voiceTrack1.segments.isEmpty { tracks.append(voiceTrack1) }
+        if !overlayTrack.segments.isEmpty  {
+            tracks.append(overlayTrack)
+        }
+        if !videoTrack.segments.isEmpty    {
+            tracks.append(videoTrack)
+        }
+        tracks.append(videoTrack)
+        if !textTrack.segments.isEmpty     {
+            tracks.append(textTrack)
+        }
+        if !subtitleTrack.segments.isEmpty {
+            tracks.append(subtitleTrack)
+        }
+        if !voiceTrack.segments.isEmpty    {
+            tracks.append(voiceTrack)
+        }
+        if !bgmTrack.segments.isEmpty      {
+            tracks.append(bgmTrack)
+        }
+        if !voiceTrack1.segments.isEmpty {
+            tracks.append(voiceTrack1)
+        }
 
         let canvas = EditorCanvas(width: schema.canvas.width, height: schema.canvas.height, fps: schema.fps)
         let metadata = EditorMetadata(

@@ -150,6 +150,11 @@ final class MacTimelineCanvasHost: NSView {
         // (lock/hide/mute toggles).
         labelSidebar.configure(tracks: timeline.tracks)
         syncLabelScrollOffset()
+
+        // The document view (canvas) frame / content changed; tell the scroll
+        // view to recompute its clip region and repaint so newly added rows and
+        // segment blocks actually become visible.
+        scrollView.reflectScrolledClipView(scrollView.contentView)
     }
 
     private func hasStructuralChange(from old: EditorTimeline, to new: EditorTimeline) -> Bool {

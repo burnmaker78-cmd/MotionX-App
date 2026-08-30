@@ -17,7 +17,7 @@ final class MacEditorShellTests: XCTestCase {
     private func makeStore() -> EditorStore {
         let canvas = EditorCanvas(width: 720, height: 1280, fps: 30)
         let timeline = EditorTimeline(canvas: canvas)
-        return EditorStore(timeline: timeline, videoURL: nil)
+        return EditorStore(timeline: timeline)
     }
 
     private func makeShell() -> MacEditorShellView {
@@ -74,8 +74,9 @@ final class MacEditorShellTests: XCTestCase {
         let window = layoutInWindow(shell, size: NSSize(width: 1200, height: 800))
         defer { window.orderOut(nil) }
 
-        // Toolbar exists.
-        XCTAssertNotNil(shell.subviews.first { $0 is MacEditorToolbar }, "missing toolbar")
+        // Toolbar is now the system unified titlebar (no in-content toolbar view).
+        // The shell should start directly with the vertical split as its only subview.
+        XCTAssertTrue(shell.subviews.allSatisfy { !($0 is NSButton) && !($0 is NSTextField) }, "shell should not host content toolbar controls")
 
         // Vertical split has two panes: top area + timeline.
         let split = verticalSplit(shell)

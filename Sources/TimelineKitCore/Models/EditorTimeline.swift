@@ -71,8 +71,11 @@ public struct EditorTimeline: Identifiable, Sendable, Hashable, Codable {
         var found = false
         for i in tracks.indices {
             if tracks[i].isMainTrack {
-                if found { tracks[i].isMainTrack = false }
-                else { found = true }
+                if found {
+                    tracks[i].isMainTrack = false
+                } else {
+                    found = true
+                }
             }
         }
     }

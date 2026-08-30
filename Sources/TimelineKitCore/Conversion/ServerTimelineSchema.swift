@@ -59,6 +59,16 @@ public struct SScene: Codable, Sendable {
         case id, start, duration, layers, transition, voice
         case shotIndex = "shot_index"
     }
+    
+    public init(id: String, shotIndex: Int, start: Double, duration: Double, layers: [SLayer], transition: STransition? = nil, voice: SVoice? = nil) {
+        self.id = id
+        self.shotIndex = shotIndex
+        self.start = start
+        self.duration = duration
+        self.layers = layers
+        self.transition = transition
+        self.voice = voice
+    }
 }
 
 public struct STransition: Codable, Sendable {
@@ -178,6 +188,27 @@ public struct SLayer: Codable, Sendable {
         }
         clipAnimations = try c.decodeIfPresent([SAnimation].self, forKey: .clipAnimations)
     }
+    
+    public init(type: String, zIndex: Int? = nil, fit: String? = nil, src: String? = nil, blur: Double? = nil, imageAnimation: SImageAnimation? = nil, depthModel: SDepthModel? = nil, camera: SCamera? = nil, videoURL: String? = nil, provider: String? = nil, model: String? = nil, content: String? = nil, startOffset: Double? = nil, endOffset: Double? = nil, position: STextPosition? = nil, style: STextStyle? = nil, textAnimation: STextAnimation? = nil, clipAnimations: [SAnimation]? = nil) {
+        self.type = type
+        self.zIndex = zIndex
+        self.fit = fit
+        self.src = src
+        self.blur = blur
+        self.imageAnimation = imageAnimation
+        self.depthModel = depthModel
+        self.camera = camera
+        self.videoURL = videoURL
+        self.provider = provider
+        self.model = model
+        self.content = content
+        self.startOffset = startOffset
+        self.endOffset = endOffset
+        self.position = position
+        self.style = style
+        self.textAnimation = textAnimation
+        self.clipAnimations = clipAnimations
+    }
 
     public func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
@@ -200,6 +231,7 @@ public struct SLayer: Codable, Sendable {
         if let a = textAnimation  { try c.encode(a, forKey: .animation) }
         try c.encodeIfPresent(clipAnimations, forKey: .clipAnimations)
     }
+    
 }
 
 public struct SImageAnimation: Codable, Sendable {

@@ -28,17 +28,10 @@ final class MacEditorShellView: NSView {
 
     // MARK: - Subviews
 
-    private let toolbar = MacEditorToolbar(frame: .zero)
     private let splitController = NSSplitViewController()
     private let topArea: MacEditorTopAreaView
     private let timelineHost: MacTimelineCanvasHost
     private let store: EditorStore
-
-    /// Forwarded to the demo / host so it can present the system file picker.
-    var onImportMedia: (() -> Void)? {
-        get { toolbar.onImportMedia }
-        set { toolbar.onImportMedia = newValue }
-    }
 
     // MARK: - Init
 
@@ -77,9 +70,6 @@ final class MacEditorShellView: NSView {
     }
 
     private func setupViews() {
-        toolbar.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(toolbar)
-
         // Top area pane.
         let topVC = NSViewController()
         topVC.view = topArea
@@ -111,14 +101,9 @@ final class MacEditorShellView: NSView {
         addSubview(splitView)
 
         NSLayoutConstraint.activate([
-            toolbar.leadingAnchor.constraint(equalTo: leadingAnchor),
-            toolbar.trailingAnchor.constraint(equalTo: trailingAnchor),
-            toolbar.topAnchor.constraint(equalTo: topAnchor),
-            toolbar.heightAnchor.constraint(equalToConstant: MacEditorToolbar.height),
-
             splitView.leadingAnchor.constraint(equalTo: leadingAnchor),
             splitView.trailingAnchor.constraint(equalTo: trailingAnchor),
-            splitView.topAnchor.constraint(equalTo: toolbar.bottomAnchor),
+            splitView.topAnchor.constraint(equalTo: topAnchor),
             splitView.bottomAnchor.constraint(equalTo: bottomAnchor)
         ])
     }

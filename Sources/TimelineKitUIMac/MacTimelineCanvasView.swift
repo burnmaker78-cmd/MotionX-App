@@ -148,10 +148,12 @@ final class MacTimelineCanvasView: NSView {
         let totalHeight = MacTimelineCanvasView.rulerHeight
             + CGFloat(sortedTracks.count) * (MacTimelineCanvasView.trackHeight + MacTimelineCanvasView.trackSpacing)
 
-        frame.size = NSSize(
+        // setFrameSize (not frame assignment) so NSScrollView receives the
+        // document-view frame-changed notification and recomputes its clip view.
+        setFrameSize(NSSize(
             width: layout.totalWidth + MacTimelineCanvasView.rightPadding,
             height: totalHeight
-        )
+        ))
 
         // Ruler
         if rulerView == nil {
@@ -192,6 +194,10 @@ final class MacTimelineCanvasView: NSView {
             row.removeFromSuperview()
             trackRowViews[id] = nil
         }
+
+        // Force a repaint: layer-backed views don't auto-redraw on subview/frame
+        // changes unless asked.
+        needsDisplay = true
     }
 
     // MARK: - Mouse events (click select)
@@ -325,6 +331,25 @@ final class MacTrackRowView: NSView {
 
     func relayoutSegments() {
         let blockH = MacTimelineCanvasView.trackHeight - 8
+
+        // Ensure a block exists for every current segment, removing stale ones.
+        var validIDs = Set<UUID>()
+        for seg in track.segments {
+            validIDs.insert(seg.id)
+            if segmentViews[seg.id] == nil {
+                let block = MacSegmentBlockView(segment: seg, track: track, layout: layout)
+                block.onTap = { [weak self] in self?.onSegmentTap?(seg.id) }
+                addSubview(block)
+                segmentViews[seg.id] = block
+            }
+        }
+        // Remove blocks for segments that no longer exist.
+        for (id, block) in segmentViews where !validIDs.contains(id) {
+            block.removeFromSuperview()
+            segmentViews[id] = nil
+        }
+
+        // Reposition all current blocks.
         for seg in track.segments {
             if let block = segmentViews[seg.id] {
                 block.layout = layout
@@ -337,6 +362,7 @@ final class MacTrackRowView: NSView {
             }
         }
         updateTrackHeader()
+        needsDisplay = true
     }
 
     private func buildSegments() {
@@ -375,14 +401,13 @@ final class MacSegmentBlockView: NSView {
     private let trackKind: EditorTrack.Kind
     var layout: TimelineTrackLayout
 
-    private let unselectedBackgroundColor: NSColor
-    private let selectedBackgroundColor: NSColor
     private let kindColor: NSColor
+    /// Text label for the segment (emoji / short text).
+    private let label = NSTextField(labelWithString: "")
 
     var isSelected: Bool = false {
         didSet {
-            needsDisplay = true
-            layer?.borderWidth = isSelected ? 2 : 0
+            updateAppearance()
         }
     }
 
@@ -393,45 +418,39 @@ final class MacSegmentBlockView: NSView {
         self.trackKind = track.kind
         self.layout = layout
         self.kindColor = Self.blockColor(for: track.kind)
-        self.unselectedBackgroundColor = Self.blockColor(for: track.kind).withAlphaComponent(0.55)
-        self.selectedBackgroundColor = Self.blockColor(for: track.kind)
         super.init(frame: .zero)
         wantsLayer = true
         layer?.cornerRadius = 4
         layer?.borderColor = NSColor.systemYellow.cgColor
+
+        label.font = .systemFont(ofSize: 10, weight: .medium)
+        label.textColor = NSColor.white.withAlphaComponent(0.85)
+        label.isBezeled = false
+        label.drawsBackground = false
+        label.isEditable = false
+        label.isSelectable = false
+        label.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(label)
+
+        NSLayoutConstraint.activate([
+            label.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor, constant: 4),
+            label.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -4),
+            label.centerYAnchor.constraint(equalTo: centerYAnchor)
+        ])
+
+        updateAppearance()
     }
 
     required init?(coder: NSCoder) { fatalError() }
 
-    override func draw(_ dirtyRect: NSRect) {
-        super.draw(dirtyRect)
-        let bg = isSelected ? selectedBackgroundColor : unselectedBackgroundColor
-        bg.setFill()
-        NSBezierPath(roundedRect: bounds, xRadius: 4, yRadius: 4).fill()
-
-        // Segment label
-        let label = Self.segmentLabel(for: segment)
-        let attrs: [NSAttributedString.Key: Any] = [
-            .font: NSFont.systemFont(ofSize: 10, weight: .medium),
-            .foregroundColor: NSColor.white.withAlphaComponent(0.85)
-        ]
-        let size = (label as NSString).size(withAttributes: attrs)
-        let x = min(6, max(2, bounds.width - size.width - 6))
-        (label as NSString).draw(at: NSPoint(x: x, y: (bounds.height - size.height) / 2), withAttributes: attrs)
+    private func updateAppearance() {
+        let bg = isSelected ? kindColor : kindColor.withAlphaComponent(0.55)
+        layer?.backgroundColor = bg.cgColor
+        layer?.borderWidth = isSelected ? 2 : 0
     }
 
     override func mouseDown(with event: NSEvent) {
         onTap?()
-    }
-
-    private static func segmentLabel(for segment: EditorSegment) -> String {
-        switch segment.content {
-        case .video: return "🎬"
-        case .image: return "🖼"
-        case .audio: return "🎵"
-        case .text(let c): return c.text.isEmpty ? "文字" : String(c.text.prefix(6))
-        case .subtitle(let c): return c.text.isEmpty ? "字幕" : String(c.text.prefix(6))
-        }
     }
 
     private static func blockColor(for kind: EditorTrack.Kind) -> NSColor {

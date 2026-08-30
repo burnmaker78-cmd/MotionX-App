@@ -45,7 +45,7 @@ final class MacCanvasHostApplyTests: XCTestCase {
     func testApplyAfterEmptyTimelineRebuildsRows() {
         // Start with an empty timeline (no main track) — the demo's initial state.
         let store = makeStore(tracks: [])
-        let host = MacTimelineCanvasHost(store: store)
+        let host = MacTimelineCanvasHost(store: store, libraryStore: TimelineLibraryStore())
         _ = hostWithWindow(host, size: NSSize(width: 1000, height: 500))
 
         // First apply: empty timeline.

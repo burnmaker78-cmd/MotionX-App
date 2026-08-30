@@ -17,7 +17,8 @@ final class MacTimelineCanvasHost: NSView {
 
     // MARK: - Subviews
 
-    private let store: EditorStore
+    private var store: EditorStore
+    private let libraryStore: TimelineLibraryStore
     private var timeline: EditorTimeline
     private var selection: SelectionState
 
@@ -38,8 +39,9 @@ final class MacTimelineCanvasHost: NSView {
 
     // MARK: - Init
 
-    init(store: EditorStore) {
+    init(store: EditorStore, libraryStore: TimelineLibraryStore) {
         self.store = store
+        self.libraryStore = libraryStore
         self.timeline = store.timeline
         self.selection = store.selection
         super.init(frame: .zero)
@@ -110,6 +112,19 @@ final class MacTimelineCanvasHost: NSView {
             guard let self else { return }
             self.lastScrubTime = 0
         }
+        // Drop a media entry from the Browser onto the canvas → insert into main track.
+        canvas.onDropMedia = { [weak self] entry, time in
+            guard let self else { return }
+            guard let url = self.libraryStore.library?.mediaFileURL(for: entry) else { return }
+            switch entry.kind {
+            case .video, .image:
+                _ = self.store.addVisualSegment(localURL: url, nativeDuration: entry.kind == .video ? entry.duration : nil)
+            case .audio:
+                _ = self.store.addAudioSegment(localURL: url, nativeDuration: entry.duration ?? 0)
+            case .other:
+                break
+            }
+        }
         labelSidebar.onToggleLock = { [weak self] id in
             guard let self, let t = self.store.timeline.track(id: id) else { return }
             self.store.setTrackLocked(id: id, isLocked: !t.isLocked)
@@ -125,6 +140,16 @@ final class MacTimelineCanvasHost: NSView {
     }
 
     // MARK: - Public API (called from SwiftUI representable)
+
+    /// Update the backing EditorStore reference (e.g. when the active project
+    /// changes and a NEW EditorStore is created). Without this, drag/drop and
+    /// click handlers keep mutating the OLD store — changes would not appear in
+    /// the timeline that the new project is displaying.
+    func updateStore(_ newStore: EditorStore) {
+        self.store = newStore
+        self.timeline = newStore.timeline
+        self.selection = newStore.selection
+    }
 
     func apply(timeline: EditorTimeline, selection: SelectionState) {
         let structural = hasStructuralChange(from: self.timeline, to: timeline)
@@ -217,9 +242,10 @@ import SwiftUI
 /// SwiftUI bridge for the AppKit timeline area.
 struct MacTimelineRepresentable: NSViewRepresentable {
     let store: EditorStore
+    let libraryStore: TimelineLibraryStore
 
     func makeNSView(context: Context) -> MacTimelineCanvasHost {
-        MacTimelineCanvasHost(store: store)
+        MacTimelineCanvasHost(store: store, libraryStore: libraryStore)
     }
 
     func updateNSView(_ nsView: MacTimelineCanvasHost, context: Context) {

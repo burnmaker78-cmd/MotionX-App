@@ -14,6 +14,8 @@ final class MacMediaPanelView: NSView {
 
     /// User tapped a media item — host adds it to the timeline.
     var onMediaSelected: ((LibraryMediaEntry) -> Void)?
+    /// User tapped a project row — host switches the active project.
+    var onSelectProject: ((UUID) -> Void)?
 
     // MARK: - Subviews
 
@@ -23,8 +25,13 @@ final class MacMediaPanelView: NSView {
     private let emptyLabel = NSTextField(labelWithString: "")
     /// 折叠状态：已折叠的日期（startOfDay）。
     private var collapsedDates: Set<Date> = []
+    /// 当前活动项目 ID（高亮对应项目行）。
+    var activeProjectID: UUID?
 
     private static let headerIdentifier = NSUserInterfaceItemIdentifier("MacMediaHeader")
+    static let projectHeaderIdentifier = NSUserInterfaceItemIdentifier("MacProjectHeader")
+    /// 拖出媒体条目到时间线的 pasteboard 类型（携带 Codable LibraryMediaEntry）。
+    static let mediaDragType = NSPasteboard.PasteboardType("com.timelinekit.mediaentry")
 
     // MARK: - Init
 
@@ -53,8 +60,14 @@ final class MacMediaPanelView: NSView {
         collectionView.backgroundColors = [NSColor(white: 0.08, alpha: 1)]
         collectionView.register(MacMediaGridItem.self, forItemWithIdentifier: MacMediaGridItem.identifier)
         collectionView.register(MacMediaSectionHeader.self, forSupplementaryViewOfKind: NSCollectionView.elementKindSectionHeader, withIdentifier: Self.headerIdentifier)
+        collectionView.register(MacProjectItem.self, forItemWithIdentifier: MacProjectItem.identifier)
+        collectionView.register(MacProjectSectionHeader.self, forSupplementaryViewOfKind: NSCollectionView.elementKindSectionHeader, withIdentifier: Self.projectHeaderIdentifier)
         collectionView.dataSource = self
         collectionView.delegate = self
+        // 拖出媒体条目到时间线（数据源 pasteboardWriterItemAt 提供 item）。
+        collectionView.registerForDraggedTypes([Self.mediaDragType])
+        collectionView.setDraggingSourceOperationMask(.copy, forLocal: true)
+        collectionView.setDraggingSourceOperationMask(.copy, forLocal: false)
 
         scrollView.documentView = collectionView
         scrollView.hasVerticalScroller = true
@@ -92,6 +105,8 @@ final class MacMediaPanelView: NSView {
 
     private func observeLoop() {
         withObservationTracking {
+            _ = libraryStore.library
+            _ = libraryStore.projects
             _ = libraryStore.mediaEntries
         } onChange: { [weak self] in
             Task { @MainActor in
@@ -124,28 +139,69 @@ final class MacMediaPanelView: NSView {
 // MARK: - NSCollectionViewDataSource
 
 extension MacMediaPanelView: NSCollectionViewDataSource {
+    /// 是否有项目分组 section（section 0）。
     func numberOfSections(in collectionView: NSCollectionView) -> Int {
-        libraryStore.groupedMedia.count
+        let projectSections = projects.isEmpty ? 0 : 1
+        return projectSections + libraryStore.groupedMedia.count
+    }
+
+    /// 将 section 映射为"项目 section"还是"日期分组索引"。
+    private func isProjectSection(_ section: Int) -> Bool {
+        !projects.isEmpty && section == 0
     }
 
     func collectionView(_ collectionView: NSCollectionView, numberOfItemsInSection section: Int) -> Int {
-        let group = libraryStore.groupedMedia[section]
+        if isProjectSection(section) {
+            return projects.count
+        }
+        let dateSection = section - (projects.isEmpty ? 0 : 1)
+        let group = libraryStore.groupedMedia[dateSection]
         return collapsedDates.contains(group.date) ? 0 : group.items.count
     }
 
     func collectionView(_ collectionView: NSCollectionView, itemForRepresentedObjectAt indexPath: IndexPath) -> NSCollectionViewItem {
+        if isProjectSection(indexPath.section) {
+            let item = collectionView.makeItem(withIdentifier: MacProjectItem.identifier, for: indexPath) as? MacProjectItem
+                ?? MacProjectItem()
+            let project = projects[indexPath.item]
+            item.configure(project: project, isSelected: project.id == activeProjectID)
+            return item
+        }
         let item = collectionView.makeItem(withIdentifier: MacMediaGridItem.identifier, for: indexPath) as? MacMediaGridItem
             ?? MacMediaGridItem()
-        let group = libraryStore.groupedMedia[indexPath.section]
+        let dateSection = indexPath.section - (projects.isEmpty ? 0 : 1)
+        let group = libraryStore.groupedMedia[dateSection]
         let entry = group.items[indexPath.item]
         item.configure(entry: entry)
         return item
     }
 
+    /// Provide a pasteboard writer so media items can be dragged out onto the
+    /// timeline canvas. Encodes the LibraryMediaEntry as JSON. Project rows are
+    /// not draggable.
+    func collectionView(_ collectionView: NSCollectionView, pasteboardWriterForItemAt indexPath: IndexPath) -> NSPasteboardWriting? {
+        if isProjectSection(indexPath.section) { return nil }
+        let dateSection = indexPath.section - (projects.isEmpty ? 0 : 1)
+        let group = libraryStore.groupedMedia[dateSection]
+        let entry = group.items[indexPath.item]
+        let item = NSPasteboardItem()
+        if let data = try? JSONEncoder().encode(entry) {
+            item.setData(data, forType: Self.mediaDragType)
+        }
+        return item
+    }
+
     func collectionView(_ collectionView: NSCollectionView, viewForSupplementaryElementOfKind kind: NSCollectionView.SupplementaryElementKind, at indexPath: IndexPath) -> NSView {
+        if isProjectSection(indexPath.section) {
+            let header = collectionView.makeSupplementaryView(ofKind: kind, withIdentifier: Self.projectHeaderIdentifier, for: indexPath) as? MacProjectSectionHeader
+                ?? MacProjectSectionHeader()
+            header.configure(count: projects.count)
+            return header
+        }
         let header = collectionView.makeSupplementaryView(ofKind: kind, withIdentifier: Self.headerIdentifier, for: indexPath) as? MacMediaSectionHeader
             ?? MacMediaSectionHeader()
-        let group = libraryStore.groupedMedia[indexPath.section]
+        let dateSection = indexPath.section - (projects.isEmpty ? 0 : 1)
+        let group = libraryStore.groupedMedia[dateSection]
         let count = group.items.count
         let isCollapsed = collapsedDates.contains(group.date)
         header.configure(date: group.date, count: count, isCollapsed: isCollapsed)
@@ -160,6 +216,9 @@ extension MacMediaPanelView: NSCollectionViewDataSource {
         }
         return header
     }
+
+    /// 当前库内项目列表。
+    private var projects: [LibraryProject] { libraryStore.projects }
 }
 
 // MARK: - NSCollectionViewDelegate
@@ -167,7 +226,13 @@ extension MacMediaPanelView: NSCollectionViewDataSource {
 extension MacMediaPanelView: NSCollectionViewDelegate {
     func collectionView(_ collectionView: NSCollectionView, didSelectItemsAt indexPaths: Set<IndexPath>) {
         guard let idx = indexPaths.first else { return }
-        let group = libraryStore.groupedMedia[idx.section]
+        if isProjectSection(idx.section) {
+            let project = projects[idx.item]
+            onSelectProject?(project.id)
+            return
+        }
+        let dateSection = idx.section - (projects.isEmpty ? 0 : 1)
+        let group = libraryStore.groupedMedia[dateSection]
         let entry = group.items[idx.item]
         onMediaSelected?(entry)
     }
@@ -273,6 +338,47 @@ final class MacMediaSectionHeader: NSView {
 
     override func mouseDown(with event: NSEvent) {
         onToggle?()
+    }
+}
+
+// MARK: - MacProjectSectionHeader
+
+/// "项目 (N)" 分组头（项目 section 的 header）。
+@MainActor
+final class MacProjectSectionHeader: NSView {
+    static let identifier = NSUserInterfaceItemIdentifier("MacProjectHeader")
+
+    private let titleLabel = NSTextField(labelWithString: "")
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+        let bg = NSView()
+        bg.wantsLayer = true
+        bg.layer?.backgroundColor = NSColor(white: 0.10, alpha: 1).cgColor
+        bg.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(bg)
+
+        titleLabel.font = .systemFont(ofSize: 11, weight: .semibold)
+        titleLabel.textColor = NSColor.white.withAlphaComponent(0.85)
+        titleLabel.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(titleLabel)
+
+        NSLayoutConstraint.activate([
+            bg.leadingAnchor.constraint(equalTo: leadingAnchor),
+            bg.trailingAnchor.constraint(equalTo: trailingAnchor),
+            bg.topAnchor.constraint(equalTo: topAnchor),
+            bg.bottomAnchor.constraint(equalTo: bottomAnchor),
+
+            titleLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
+            titleLabel.centerYAnchor.constraint(equalTo: centerYAnchor)
+        ])
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    func configure(count: Int) {
+        titleLabel.stringValue = "▾ 项目  (\(count))"
     }
 }
 

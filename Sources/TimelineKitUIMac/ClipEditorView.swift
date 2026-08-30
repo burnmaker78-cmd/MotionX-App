@@ -27,8 +27,11 @@ public struct ClipEditorView: View {
     private let onDraftSave: ((UUID, EditorTimeline) -> Void)?
     @State private var showAddMediaPicker = false
     @State private var showCreateOrOpenLibrary = false
+    @State private var showCreateProject = false
+    @State private var newProjectName = ""
     @State private var errorMessage: String?
     @State private var isImporting = false
+    @State private var activeProjectID: UUID?
 
     public init(
         store: EditorStore,
@@ -47,7 +50,10 @@ public struct ClipEditorView: View {
             compositionPlayer: coordinator.player,
             timelinePreviewView: coordinator.timelinePreviewView,
             onImportMedia: { showAddMediaPicker = true },
-            onCreateOrOpenLibrary: { showCreateOrOpenLibrary = true }
+            onCreateOrOpenLibrary: { showCreateOrOpenLibrary = true },
+            onCreateProject: { showCreateProject = true },
+            onSelectProject: { id in switchToProject(byID: id) },
+            activeProjectID: activeProjectID
         )
         // NSView default intrinsicContentSize is noIntrinsicMetric; SwiftUI would
         // otherwise size the AppKit shell to 0 height. Force it to fill.
@@ -121,6 +127,53 @@ public struct ClipEditorView: View {
         } message: {
             Text("资源库存放媒体与项目，可选择任意可访问位置保存。")
         }
+        // 创建项目（项目 = 一个 timeline）。
+        .alert("创建项目", isPresented: $showCreateProject) {
+            TextField("项目名称", text: $newProjectName, prompt: Text("未命名项目"))
+            Button("创建") {
+                createProject()
+            }
+            Button("取消", role: .cancel) {
+                newProjectName = ""
+            }
+        } message: {
+            Text("项目是一条时间线，你可以在其中排列和编辑媒体。")
+        }
+    }
+
+    // MARK: - Project
+
+    private func createProject() {
+        let name = newProjectName.isEmpty ? "未命名项目" : newProjectName
+        newProjectName = ""
+        do {
+            let project = try libraryStore.createProject(name: name)
+            switchTo(project: project)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    /// 切换到某项目：用其 timeline 新建 EditorStore 并重新接线 coordinator。
+    private func switchTo(project: LibraryProject) {
+        let newStore = EditorStore(timeline: project.timeline)
+        store = newStore
+        activeProjectID = project.id
+        coordinator.attach(to: store)
+        store.coordinatorPlayer = coordinator.player
+        store.coordinator = coordinator
+        coordinator.scheduleRebuild(timeline: store.timeline, immediate: true)
+        draftStore.bind(to: store)
+    }
+
+    /// 按项目 ID 切换活动项目（从库加载项目）。
+    private func switchToProject(byID id: UUID) {
+        do {
+            let project = try libraryStore.loadProject(projectID: id)
+            switchTo(project: project)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
     }
 
     // MARK: - Library panels (AppKit)
@@ -181,19 +234,10 @@ public struct ClipEditorView: View {
 
     // MARK: - Add Media
 
-    /// Add imported URLs to the timeline, auto-routing by type:
-    /// video/image → visual segment (main/overlay track), audio → audio track.
-    ///
-    /// macOS sandbox: fileImporter returns security-scoped URLs into the user's
-    /// folders (e.g. ~/Downloads). Security scope only lasts as long as
-    /// startAccessingSecurityScopedResource() is held, but the render pipeline
-    /// reads these URLs later on background threads. So we COPY each file into
-    /// the app container's temporary directory and use the copies — otherwise
-    /// AVFoundation can't open the media (Code=257 permission denied, "no video
-    /// track").
-    /// Import URLs into the current library, then add the library copies to the
-    /// current timeline. The library persists media in `Media/` so the files
-    /// survive even if the source location changes or temporary caches clear.
+    /// Import URLs into the current library only — media does NOT enter any
+    /// project/timeline here. Media reaches a timeline later when the user
+    /// drags a media item from the Browser into the timeline (or taps it while
+    /// a project is active).
     private func addMedia(urls: [URL]) async {
         await MainActor.run { isImporting = true }
         defer {
@@ -201,41 +245,23 @@ public struct ClipEditorView: View {
         }
 
         // Import into the library (copies files to Media/<assetID>.<ext>).
-        let libraryURLs = await libraryStore.addMedia(urls: urls)
-        guard !libraryURLs.isEmpty else {
-            if let msg = libraryStore.errorMessage { errorMessage = msg }
-            return
-        }
+        _ = await libraryStore.addMedia(urls: urls)
+        if let msg = libraryStore.errorMessage { errorMessage = msg }
+    }
 
-        for libraryURL in libraryURLs {
-            let ext = libraryURL.pathExtension.lowercased()
-            let isVideo = ["mp4", "mov", "m4v", "avi", "mpeg"].contains(ext)
-            let isImage = ["png", "jpg", "jpeg", "heic", "gif", "webp"].contains(ext)
-            let isAudio = ["mp3", "m4a", "wav", "aac", "caf"].contains(ext)
-
-            if isVideo || isImage {
-                let native = isVideo ? (await avDuration(of: libraryURL) ?? 0) : nil
-                await MainActor.run {
-                    _ = store.addVisualSegment(localURL: libraryURL, nativeDuration: native)
-                }
-            } else if isAudio {
-                let native = await avDuration(of: libraryURL) ?? 0
-                await MainActor.run {
-                    _ = store.addAudioSegment(localURL: libraryURL, nativeDuration: native)
-                }
-            } else if let type = try? libraryURL.resourceValues(forKeys: [.contentTypeKey]).contentType {
-                if type.conforms(to: .movie) || type.conforms(to: .video) {
-                    let native = await avDuration(of: libraryURL) ?? 0
-                    await MainActor.run {
-                        _ = store.addVisualSegment(localURL: libraryURL, nativeDuration: native)
-                    }
-                } else if type.conforms(to: .audio) {
-                    let native = await avDuration(of: libraryURL) ?? 0
-                    await MainActor.run {
-                        _ = store.addAudioSegment(localURL: libraryURL, nativeDuration: native)
-                    }
-                }
-            }
+    /// Add a single library media entry into the current project's timeline,
+    /// auto-routing by kind. No-op if no active project.
+    private func addToCurrentProject(entry: LibraryMediaEntry) {
+        guard let library = libraryStore.library else { return }
+        let url = library.mediaFileURL(for: entry)
+        switch entry.kind {
+        case .video, .image:
+            let native = entry.kind == .video ? entry.duration : nil
+            _ = store.addVisualSegment(localURL: url, nativeDuration: native)
+        case .audio:
+            _ = store.addAudioSegment(localURL: url, nativeDuration: entry.duration ?? 0)
+        case .other:
+            break
         }
     }
 
@@ -273,6 +299,9 @@ struct MacEditorShellRepresentable: NSViewRepresentable {
     let timelinePreviewView: TimelinePreviewView?
     var onImportMedia: (() -> Void)?
     var onCreateOrOpenLibrary: (() -> Void)?
+    var onCreateProject: (() -> Void)?
+    var onSelectProject: ((UUID) -> Void)?
+    var activeProjectID: UUID?
 
     func makeNSView(context: Context) -> MacEditorShellView {
         MacEditorShellView(
@@ -281,12 +310,20 @@ struct MacEditorShellRepresentable: NSViewRepresentable {
             compositionPlayer: compositionPlayer,
             timelinePreviewView: timelinePreviewView,
             onImportMedia: onImportMedia,
-            onCreateOrOpenLibrary: onCreateOrOpenLibrary
+            onCreateOrOpenLibrary: onCreateOrOpenLibrary,
+            onCreateProject: onCreateProject,
+            onSelectProject: onSelectProject,
+            activeProjectID: activeProjectID
         )
     }
 
     func updateNSView(_ nsView: MacEditorShellView, context: Context) {
+        // Sync the backing store (active project may have switched to a NEW
+        // EditorStore) so drag/drop and click handlers mutate the CURRENT
+        // project's timeline, not the one from makeNSView.
+        nsView.updateStore(store)
         nsView.apply(timeline: timeline, selection: selection)
+        nsView.updateActiveProject(id: activeProjectID)
     }
 }
 

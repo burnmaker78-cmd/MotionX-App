@@ -41,7 +41,10 @@ final class MacEditorShellView: NSView {
         compositionPlayer: AVPlayer?,
         timelinePreviewView: TimelinePreviewView?,
         onImportMedia: (() -> Void)? = nil,
-        onCreateOrOpenLibrary: (() -> Void)? = nil
+        onCreateOrOpenLibrary: (() -> Void)? = nil,
+        onCreateProject: (() -> Void)? = nil,
+        onSelectProject: ((UUID) -> Void)? = nil,
+        activeProjectID: UUID? = nil
     ) {
         self.store = store
         self.topArea = MacEditorTopAreaView(
@@ -50,9 +53,12 @@ final class MacEditorShellView: NSView {
             compositionPlayer: compositionPlayer,
             timelinePreviewView: timelinePreviewView,
             onImportMedia: onImportMedia,
-            onCreateOrOpenLibrary: onCreateOrOpenLibrary
+            onCreateOrOpenLibrary: onCreateOrOpenLibrary,
+            onCreateProject: onCreateProject,
+            onSelectProject: onSelectProject,
+            activeProjectID: activeProjectID
         )
-        self.timelineHost = MacTimelineCanvasHost(store: store)
+        self.timelineHost = MacTimelineCanvasHost(store: store, libraryStore: libraryStore)
         super.init(frame: .zero)
         // 强制深色外观：编辑器整体是深色主题（与 iOS 端 Color(white:0.08) 一致）。
         // 不设置时系统浅色外观会让 windowBackgroundColor 等语义色解析为白色，
@@ -120,8 +126,18 @@ final class MacEditorShellView: NSView {
 
     // MARK: - Timeline state push (called by the SwiftUI shell)
 
+    /// Update the backing store reference (active project may have changed).
+    func updateStore(_ newStore: EditorStore) {
+        timelineHost.updateStore(newStore)
+    }
+
     func apply(timeline: EditorTimeline, selection: SelectionState) {
         timelineHost.apply(timeline: timeline, selection: selection)
+    }
+
+    /// 更新当前活动项目 ID（用于高亮项目行）。
+    func updateActiveProject(id: UUID?) {
+        topArea.updateActiveProject(id: id)
     }
 }
 

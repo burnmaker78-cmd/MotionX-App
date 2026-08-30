@@ -53,6 +53,8 @@ final class MacTimelineCanvasView: NSView {
     var onPlayheadScrub: ((Double) -> Void)?
     /// Called when scrub ends (e.g. to resume playback that was paused on scrub start).
     var onScrubEnded: (() -> Void)?
+    /// Called when a media entry is dropped onto the canvas at a timeline time.
+    var onDropMedia: ((LibraryMediaEntry, Double) -> Void)?
     /// Called when a label sidebar toggle is hit.
     var onToggleLock: ((UUID) -> Void)?
     var onToggleHidden: ((UUID) -> Void)?
@@ -64,6 +66,8 @@ final class MacTimelineCanvasView: NSView {
         super.init(frame: frameRect)
         wantsLayer = true
         setupPlayhead()
+        // 接收从媒体面板拖入的媒体条目（LibraryMediaEntry JSON）。
+        registerForDraggedTypes([MacMediaPanelView.mediaDragType])
     }
 
     required init?(coder: NSCoder) { fatalError() }
@@ -209,6 +213,33 @@ final class MacTimelineCanvasView: NSView {
         } else {
             onEmptyTap?()
         }
+    }
+}
+
+// MARK: - NSDraggingDestination (media drop into track)
+
+// NSView already conforms to NSDraggingDestination; NSView's own
+// draggingEntered/performDragOperation are overridden here.
+extension MacTimelineCanvasView {
+    override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
+        // Only accept our media-entry pasteboard type.
+        guard sender.draggingPasteboard.availableType(from: [MacMediaPanelView.mediaDragType]) != nil else {
+            return []
+        }
+        return .copy
+    }
+
+    override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
+        let pb = sender.draggingPasteboard
+        guard let data = pb.data(forType: MacMediaPanelView.mediaDragType),
+              let entry = try? JSONDecoder().decode(LibraryMediaEntry.self, from: data) else {
+            return false
+        }
+        // Drop position → timeline time (x is in canvas coordinates).
+        let dropPoint = convert(sender.draggingLocation, from: nil)
+        let time = self.time(at: dropPoint.x)
+        onDropMedia?(entry, max(0, time))
+        return true
     }
 }
 

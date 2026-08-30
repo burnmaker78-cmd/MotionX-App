@@ -41,7 +41,10 @@ final class MacEditorTopAreaView: NSView {
         compositionPlayer: AVPlayer?,
         timelinePreviewView: TimelinePreviewView?,
         onImportMedia: (() -> Void)? = nil,
-        onCreateOrOpenLibrary: (() -> Void)? = nil
+        onCreateOrOpenLibrary: (() -> Void)? = nil,
+        onCreateProject: (() -> Void)? = nil,
+        onSelectProject: ((UUID) -> Void)? = nil,
+        activeProjectID: UUID? = nil
     ) {
         self.store = store
         self.compositionPlayer = compositionPlayer
@@ -50,10 +53,18 @@ final class MacEditorTopAreaView: NSView {
         super.init(frame: .zero)
         browserView.onImportMedia = onImportMedia
         browserView.onCreateOrOpenLibrary = onCreateOrOpenLibrary
+        browserView.onCreateProject = onCreateProject
+        browserView.onSelectProject = onSelectProject
+        browserView.activeProjectID = activeProjectID
         setupViews()
     }
 
     required init?(coder: NSCoder) { fatalError() }
+
+    /// 更新当前活动项目 ID（browserView 高亮对应项目行）。
+    func updateActiveProject(id: UUID?) {
+        browserView.activeProjectID = id
+    }
 
     /// preferredThicknessFraction does not apply when the NSSplitViewController
     /// is embedded as a plain view (not a real VC hierarchy). Set the initial

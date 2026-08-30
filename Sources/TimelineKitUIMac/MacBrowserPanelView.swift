@@ -19,6 +19,10 @@ final class MacBrowserPanelView: NSView {
     var onCreateOrOpenLibrary: (() -> Void)?
     var onImportMedia: (() -> Void)?
     var onMediaSelected: ((LibraryMediaEntry) -> Void)?
+    var onCreateProject: (() -> Void)?
+    var onSelectProject: ((UUID) -> Void)?
+    /// 当前活动项目 ID（mediaPanel 用于高亮项目行）。
+    var activeProjectID: UUID? { didSet { mediaPanel.activeProjectID = activeProjectID; mediaPanel.refresh() } }
 
     // MARK: - Subviews
 
@@ -48,7 +52,9 @@ final class MacBrowserPanelView: NSView {
     private func setupViews() {
         sidebar.onCreateOrOpenLibrary = { [weak self] in self?.onCreateOrOpenLibrary?() }
         sidebar.onImportMedia = { [weak self] in self?.onImportMedia?() }
+        sidebar.onCreateProject = { [weak self] in self?.onCreateProject?() }
         mediaPanel.onMediaSelected = { [weak self] entry in self?.onMediaSelected?(entry) }
+        mediaPanel.onSelectProject = { [weak self] id in self?.onSelectProject?(id) }
 
         // Left sidebar pane.
         let sidebarVC = NSViewController()
@@ -104,6 +110,7 @@ final class MacBrowserPanelView: NSView {
     /// Refresh the sidebar + media panel from the library store state.
     func refresh() {
         sidebar.setLibraryName(libraryStore.library?.name)
+        sidebar.setProjects(libraryStore.projects)
         mediaPanel.refresh()
     }
 }

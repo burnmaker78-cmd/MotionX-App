@@ -104,7 +104,17 @@ public final class TimelineLibraryStore {
 
     // MARK: - Project
 
-    /// 把 timeline 保存为库内项目。
+    /// 当前库内所有项目（从库读取）。
+    public var projects: [LibraryProject] { library?.listProjects() ?? [] }
+
+    /// 把项目保存为库内项目。
+    @discardableResult
+    public func saveProject(_ project: LibraryProject) throws -> UUID {
+        guard let library else { throw TimelineLibraryError.notABundle(URL(fileURLWithPath: "")) }
+        return try library.saveProject(project)
+    }
+
+    /// 把 timeline 保存为库内项目（无名称包装；保留旧签名兼容）。
     @discardableResult
     public func saveProject(_ timeline: EditorTimeline) throws -> UUID {
         guard let library else { throw TimelineLibraryError.notABundle(URL(fileURLWithPath: "")) }
@@ -112,13 +122,32 @@ public final class TimelineLibraryStore {
     }
 
     /// 加载库内项目。
-    public func loadProject(projectID: UUID) throws -> EditorTimeline {
+    public func loadProject(projectID: UUID) throws -> LibraryProject {
         guard let library else { throw TimelineLibraryError.notABundle(URL(fileURLWithPath: "")) }
         return try library.loadProject(projectID: projectID)
     }
 
+    /// 创建一个新项目（空 timeline + 主轨骨架），落库并返回。
+    public func createProject(name: String) throws -> LibraryProject {
+        guard let library else { throw TimelineLibraryError.notABundle(URL(fileURLWithPath: "")) }
+        let canvas = EditorCanvas(width: 1920, height: 1080, fps: 30)
+        var timeline = EditorTimeline(canvas: canvas)
+        if !timeline.tracks.contains(where: { $0.isMainTrack }) {
+            timeline.tracks.append(EditorTrack(id: UUID(), kind: .video, label: "视频", zPosition: 0, segments: [], isMainTrack: true))
+        }
+        let project = LibraryProject(name: name, timeline: timeline)
+        try library.saveProject(project)
+        refreshProjects()
+        return project
+    }
+
     /// 当前库内所有项目 ID。
     public func projectIDs() -> [UUID] {
-        library?.listProjectIDs() ?? []
+        projects.map(\.id)
+    }
+
+    /// 重新读取库内项目列表。
+    public func refreshProjects() {
+        // projects 是计算属性，刷新由观察循环读该属性触发；此处保留以对齐语义。
     }
 }

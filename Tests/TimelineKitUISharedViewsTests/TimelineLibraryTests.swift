@@ -101,8 +101,44 @@ final class TimelineLibraryTests: XCTestCase {
 
         XCTAssertEqual(lib.listProjectIDs(), [projectID])
         let loaded = try lib.loadProject(projectID: projectID)
-        XCTAssertEqual(loaded.canvas.width, 1920)
-        XCTAssertEqual(loaded.canvas.height, 1080)
+        XCTAssertEqual(loaded.timeline.canvas.width, 1920)
+        XCTAssertEqual(loaded.timeline.canvas.height, 1080)
+    }
+
+    // MARK: - Project with name
+
+    func testSaveProjectWithNameRoundTrips() throws {
+        let lib = try TimelineLibrary.create(at: bundleURL)
+
+        let canvas = EditorCanvas(width: 1920, height: 1080, fps: 30)
+        let timeline = EditorTimeline(canvas: canvas)
+        let project = LibraryProject(name: "我的项目", timeline: timeline)
+        let id = try lib.saveProject(project)
+
+        let projects = lib.listProjects()
+        XCTAssertEqual(projects.count, 1)
+        XCTAssertEqual(projects.first?.id, id)
+        XCTAssertEqual(projects.first?.name, "我的项目")
+        XCTAssertEqual(projects.first?.timeline.canvas.width, 1920)
+    }
+
+    func testLoadLegacyProjectFallsBackToFileName() throws {
+        let lib = try TimelineLibrary.create(at: bundleURL)
+
+        // Write a legacy .tlkproj (bare EditorTimeline, no LibraryProject wrapper).
+        let projectID = UUID()
+        let canvas = EditorCanvas(width: 1280, height: 720, fps: 30)
+        let timeline = EditorTimeline(canvas: canvas)
+        let url = lib.projectsDirectory
+            .appendingPathComponent(projectID.uuidString)
+            .appendingPathExtension("tlkproj")
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .sortedKeys
+        try encoder.encode(timeline).write(to: url, options: .atomic)
+
+        let loaded = try lib.loadProject(projectID: projectID)
+        XCTAssertEqual(loaded.timeline.canvas.width, 1280)
+        XCTAssertEqual(loaded.timeline.canvas.height, 720)
     }
 }
 

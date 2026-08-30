@@ -32,6 +32,25 @@ public struct LibraryMediaEntry: Codable, Sendable, Hashable, Identifiable {
     }
 }
 
+/// 库内一个项目（= 一个 timeline）。持久化到 `Projects/<id>.tlkproj`。
+///
+/// 项目 = 名称 + 一个 EditorTimeline（项目即一条时间线）。含名称以便在
+/// Browser 左栏项目列表展示；旧 `.tlkproj` 只有 EditorTimeline（无名称）时
+/// 读取回退用文件名。
+public struct LibraryProject: Codable, Sendable, Hashable, Identifiable {
+    public let id: UUID
+    public var name: String
+    public var createdAt: Date
+    public var timeline: EditorTimeline
+
+    public init(id: UUID = UUID(), name: String, createdAt: Date = Date(), timeline: EditorTimeline) {
+        self.id = id
+        self.name = name
+        self.createdAt = createdAt
+        self.timeline = timeline
+    }
+}
+
 /// TimelineKit 资源库（Library）—— 自研 `.tlkbundle` 目录包。
 ///
 /// FCP 资源库心智模型（对照 `.fcpbundle`）：库 = 媒体库 + 项目。
@@ -252,34 +271,57 @@ public struct TimelineLibrary: Sendable {
     // MARK: - Project persistence
 
     /// 把 timeline 保存为库内项目（`Projects/<projectID>.tlkproj`）。
+    /// 项目封装为 `LibraryProject`（含名称 + timeline）。
     @discardableResult
-    public func saveProject(_ timeline: EditorTimeline, projectID: UUID = UUID()) throws -> UUID {
+    public func saveProject(_ project: LibraryProject) throws -> UUID {
         let encoder = JSONEncoder()
         encoder.outputFormatting = .sortedKeys
-        let data = try encoder.encode(timeline)
+        let data = try encoder.encode(project)
         let url = projectsDirectory
-            .appendingPathComponent(projectID.uuidString)
+            .appendingPathComponent(project.id.uuidString)
             .appendingPathExtension("tlkproj")
         try data.write(to: url, options: .atomic)
-        return projectID
+        return project.id
     }
 
-    /// 加载库内某项目。
-    public func loadProject(projectID: UUID) throws -> EditorTimeline {
+    /// 把 timeline 保存为库内项目（无名称包装；保留旧签名兼容）。
+    @discardableResult
+    public func saveProject(_ timeline: EditorTimeline, projectID: UUID = UUID()) throws -> UUID {
+        try saveProject(LibraryProject(id: projectID, name: "未命名项目", timeline: timeline))
+    }
+
+    /// 加载库内某项目（兼容旧 `.tlkproj`：纯 EditorTimeline 时回退名称）。
+    public func loadProject(projectID: UUID) throws -> LibraryProject {
         let url = projectsDirectory
             .appendingPathComponent(projectID.uuidString)
             .appendingPathExtension("tlkproj")
         let data = try Data(contentsOf: url)
-        return try JSONDecoder().decode(EditorTimeline.self, from: data)
+        // 先尝试新的 LibraryProject 格式，失败则回退纯 EditorTimeline。
+        if let project = try? JSONDecoder().decode(LibraryProject.self, from: data) {
+            return project
+        }
+        if let timeline = try? JSONDecoder().decode(EditorTimeline.self, from: data) {
+            let name = projectID.uuidString  // 旧文件无名称，用项目 ID 作名称
+            return LibraryProject(id: projectID, name: name, timeline: timeline)
+        }
+        throw TimelineLibraryError.corruptProject(projectID)
     }
 
-    /// 枚举库内项目 ID。
-    public func listProjectIDs() -> [UUID] {
+    /// 枚举库内所有项目。
+    public func listProjects() -> [LibraryProject] {
         (try? FileManager.default.contentsOfDirectory(
             at: projectsDirectory,
             includingPropertiesForKeys: nil,
             options: [.skipsHiddenFiles]
-        ).compactMap { UUID(uuidString: $0.deletingPathExtension().lastPathComponent) }) ?? []
+        ).compactMap { url in
+            guard let id = UUID(uuidString: url.deletingPathExtension().lastPathComponent) else { return nil }
+            return try? loadProject(projectID: id)
+        }) ?? []
+    }
+
+    /// 枚举库内项目 ID。
+    public func listProjectIDs() -> [UUID] {
+        listProjects().map(\.id)
     }
 
     // MARK: - Metadata
@@ -310,11 +352,13 @@ public struct TimelineLibrary: Sendable {
 public enum TimelineLibraryError: Error, LocalizedError {
     case notABundle(URL)
     case sourceMissing
+    case corruptProject(UUID)
 
     public var errorDescription: String? {
         switch self {
         case .notABundle(let url): return "\(url.lastPathComponent) 不是有效的资源库"
         case .sourceMissing: return "源素材不存在"
+        case .corruptProject(let id): return "项目 \(id) 无法解析"
         }
     }
 }

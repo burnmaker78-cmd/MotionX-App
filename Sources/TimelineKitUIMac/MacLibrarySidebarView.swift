@@ -15,6 +15,10 @@ final class MacLibrarySidebarView: NSView {
     var onImportMedia: (() -> Void)?
     /// 用户选中某个资源库/事件（参数为 nil = 全库）。
     var onSelectScope: ((LibraryMediaEntry.MediaKind?) -> Void)?
+    /// 用户点"创建项目"。
+    var onCreateProject: (() -> Void)?
+    /// 用户点某个项目（切换活动项目）。
+    var onSelectProject: ((UUID) -> Void)?
 
     // MARK: - Subviews
 
@@ -22,6 +26,9 @@ final class MacLibrarySidebarView: NSView {
     private let libraryNameLabel = NSTextField(labelWithString: "")
     private let openButton = NSButton()
     private let importButton = NSButton()
+    private let projectTitleLabel = NSTextField(labelWithString: "项目")
+    private let createProjectButton = NSButton()
+    private let projectListLabel = NSTextField(labelWithString: "")
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -42,6 +49,19 @@ final class MacLibrarySidebarView: NSView {
         configureButton(openButton, title: "打开资源库", symbol: "folder", action: #selector(openTapped))
         configureButton(importButton, title: "导入媒体", symbol: "square.and.arrow.down", action: #selector(importTapped))
 
+        projectTitleLabel.font = .systemFont(ofSize: 11, weight: .semibold)
+        projectTitleLabel.textColor = NSColor.white.withAlphaComponent(0.6)
+        projectTitleLabel.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(projectTitleLabel)
+
+        configureButton(createProjectButton, title: "新建项目", symbol: "plus", action: #selector(createProjectTapped))
+
+        projectListLabel.font = .systemFont(ofSize: 11)
+        projectListLabel.textColor = NSColor.white.withAlphaComponent(0.65)
+        projectListLabel.lineBreakMode = .byTruncatingMiddle
+        projectListLabel.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(projectListLabel)
+
         NSLayoutConstraint.activate([
             titleLabel.topAnchor.constraint(equalTo: topAnchor, constant: 10),
             titleLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 12),
@@ -54,7 +74,17 @@ final class MacLibrarySidebarView: NSView {
             importButton.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 12),
 
             openButton.topAnchor.constraint(equalTo: importButton.bottomAnchor, constant: 8),
-            openButton.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 12)
+            openButton.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 12),
+
+            projectTitleLabel.topAnchor.constraint(equalTo: openButton.bottomAnchor, constant: 20),
+            projectTitleLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 12),
+
+            createProjectButton.topAnchor.constraint(equalTo: projectTitleLabel.bottomAnchor, constant: 8),
+            createProjectButton.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 12),
+
+            projectListLabel.topAnchor.constraint(equalTo: createProjectButton.bottomAnchor, constant: 10),
+            projectListLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 12),
+            projectListLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -12)
         ])
     }
 
@@ -76,8 +106,15 @@ final class MacLibrarySidebarView: NSView {
         libraryNameLabel.stringValue = name ?? "未打开资源库"
     }
 
+    func setProjects(_ projects: [LibraryProject]) {
+        projectListLabel.stringValue = projects.isEmpty
+            ? "暂无项目"
+            : projects.map(\.name).joined(separator: "\n")
+    }
+
     @objc private func openTapped() { onCreateOrOpenLibrary?() }
     @objc private func importTapped() { onImportMedia?() }
+    @objc private func createProjectTapped() { onCreateProject?() }
 }
 
 #endif

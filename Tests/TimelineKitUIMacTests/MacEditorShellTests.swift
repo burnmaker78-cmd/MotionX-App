@@ -23,6 +23,7 @@ final class MacEditorShellTests: XCTestCase {
     private func makeShell() -> MacEditorShellView {
         MacEditorShellView(
             store: makeStore(),
+            libraryStore: TimelineLibraryStore(),
             compositionPlayer: nil,
             timelinePreviewView: nil
         )

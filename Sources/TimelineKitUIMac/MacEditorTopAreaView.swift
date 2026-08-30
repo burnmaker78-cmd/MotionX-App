@@ -25,7 +25,7 @@ final class MacEditorTopAreaView: NSView {
     // MARK: - Subviews
 
     private let splitController = NSSplitViewController()
-    private let browserView = MacBrowserPanelView(frame: .zero)
+    private let browserView: MacBrowserPanelView
     private let viewerHost = NSHostingView<AnyView>(rootView: AnyView(EmptyView()))
     private let inspectorView = MacInspectorPanelView(frame: .zero)
 
@@ -37,13 +37,19 @@ final class MacEditorTopAreaView: NSView {
 
     init(
         store: EditorStore,
+        libraryStore: TimelineLibraryStore,
         compositionPlayer: AVPlayer?,
-        timelinePreviewView: TimelinePreviewView?
+        timelinePreviewView: TimelinePreviewView?,
+        onImportMedia: (() -> Void)? = nil,
+        onCreateOrOpenLibrary: (() -> Void)? = nil
     ) {
         self.store = store
         self.compositionPlayer = compositionPlayer
         self.timelinePreviewView = timelinePreviewView
+        self.browserView = MacBrowserPanelView(libraryStore: libraryStore)
         super.init(frame: .zero)
+        browserView.onImportMedia = onImportMedia
+        browserView.onCreateOrOpenLibrary = onCreateOrOpenLibrary
         setupViews()
     }
 

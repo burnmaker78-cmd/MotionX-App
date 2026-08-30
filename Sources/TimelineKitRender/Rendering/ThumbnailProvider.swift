@@ -51,7 +51,7 @@ public actor ThumbnailProvider {
 
     // MARK: - Init
 
-    init() {
+    public init() {
         cache.totalCostLimit = 50 * 1_024 * 1_024  // 50 MB
 #if canImport(UIKit)
         NotificationCenter.default.addObserver(

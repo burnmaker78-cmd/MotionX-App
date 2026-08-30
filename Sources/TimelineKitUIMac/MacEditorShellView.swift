@@ -35,12 +35,22 @@ final class MacEditorShellView: NSView {
 
     // MARK: - Init
 
-    init(store: EditorStore, compositionPlayer: AVPlayer?, timelinePreviewView: TimelinePreviewView?) {
+    init(
+        store: EditorStore,
+        libraryStore: TimelineLibraryStore,
+        compositionPlayer: AVPlayer?,
+        timelinePreviewView: TimelinePreviewView?,
+        onImportMedia: (() -> Void)? = nil,
+        onCreateOrOpenLibrary: (() -> Void)? = nil
+    ) {
         self.store = store
         self.topArea = MacEditorTopAreaView(
             store: store,
+            libraryStore: libraryStore,
             compositionPlayer: compositionPlayer,
-            timelinePreviewView: timelinePreviewView
+            timelinePreviewView: timelinePreviewView,
+            onImportMedia: onImportMedia,
+            onCreateOrOpenLibrary: onCreateOrOpenLibrary
         )
         self.timelineHost = MacTimelineCanvasHost(store: store)
         super.init(frame: .zero)

@@ -23,29 +23,31 @@ public struct ClipEditorView: View {
     @State private var store: EditorStore
     @State private var coordinator = CompositionCoordinator()
     @State private var draftStore  = DraftStore()
+    @State private var libraryStore = TimelineLibraryStore()
     private let onDraftSave: ((UUID, EditorTimeline) -> Void)?
-    private let onImportMedia: (() -> Void)?
     @State private var showAddMediaPicker = false
+    @State private var showCreateOrOpenLibrary = false
     @State private var errorMessage: String?
     @State private var isImporting = false
 
     public init(
         store: EditorStore,
-        onDraftSave: ((UUID, EditorTimeline) -> Void)? = nil,
-        onImportMedia: (() -> Void)? = nil
+        onDraftSave: ((UUID, EditorTimeline) -> Void)? = nil
     ) {
         _store = State(initialValue: store)
         self.onDraftSave = onDraftSave
-        self.onImportMedia = onImportMedia
     }
 
     public var body: some View {
         MacEditorShellRepresentable(
             store: store,
+            libraryStore: libraryStore,
             timeline: store.document.timeline,
             selection: store.document.selection,
             compositionPlayer: coordinator.player,
-            timelinePreviewView: coordinator.timelinePreviewView
+            timelinePreviewView: coordinator.timelinePreviewView,
+            onImportMedia: { showAddMediaPicker = true },
+            onCreateOrOpenLibrary: { showCreateOrOpenLibrary = true }
         )
         // NSView default intrinsicContentSize is noIntrinsicMetric; SwiftUI would
         // otherwise size the AppKit shell to 0 height. Force it to fill.
@@ -108,6 +110,56 @@ public struct ClipEditorView: View {
         } message: {
             Text(errorMessage ?? "")
         }
+        .confirmationDialog("资源库", isPresented: $showCreateOrOpenLibrary, titleVisibility: .visible) {
+            Button("创建资源库…") {
+                presentCreateLibraryPanel()
+            }
+            Button("打开已有资源库…") {
+                presentOpenLibraryPanel()
+            }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("资源库存放媒体与项目，可选择任意可访问位置保存。")
+        }
+    }
+
+    // MARK: - Library panels (AppKit)
+
+    /// NSSavePanel: pick a location + name for a new .tlkbundle, then create it.
+    private func presentCreateLibraryPanel() {
+        let panel = NSSavePanel()
+        panel.title = "创建资源库"
+        panel.nameFieldStringValue = "未命名资源库"
+        panel.canCreateDirectories = true
+        panel.allowedContentTypes = [.folder]
+        panel.begin { response in
+            guard response == .OK, let url = panel.url else { return }
+            let bundleURL = url.pathExtension.lowercased() == "tlkbundle"
+                ? url
+                : url.appendingPathExtension("tlkbundle")
+            do {
+                try self.libraryStore.createLibrary(at: bundleURL)
+            } catch {
+                self.errorMessage = error.localizedDescription
+            }
+        }
+    }
+
+    /// NSOpenPanel: pick an existing .tlkbundle and open it.
+    private func presentOpenLibraryPanel() {
+        let panel = NSOpenPanel()
+        panel.title = "打开资源库"
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.begin { response in
+            guard response == .OK, let url = panel.url else { return }
+            do {
+                try self.libraryStore.openLibrary(at: url)
+            } catch {
+                self.errorMessage = error.localizedDescription
+            }
+        }
     }
 
     // MARK: - Add Media
@@ -122,64 +174,51 @@ public struct ClipEditorView: View {
     /// the app container's temporary directory and use the copies — otherwise
     /// AVFoundation can't open the media (Code=257 permission denied, "no video
     /// track").
+    /// Import URLs into the current library, then add the library copies to the
+    /// current timeline. The library persists media in `Media/` so the files
+    /// survive even if the source location changes or temporary caches clear.
     private func addMedia(urls: [URL]) async {
         await MainActor.run { isImporting = true }
         defer {
             Task { @MainActor in isImporting = false }
         }
 
-        for url in urls {
-            // Keep the security scope while copying, then release it.
-            let accessing = url.startAccessingSecurityScopedResource()
-            defer { if accessing { url.stopAccessingSecurityScopedResource() } }
-
-            // Copy into the sandbox container so the URL stays readable for the
-            // whole session (import, preview, thumbnails, export).
-            guard let containerURL = Self.importCopy(of: url) else {
-                errorMessage = "无法读取素材：\(url.lastPathComponent)"
-                continue
-            }
-
-            let type: UTType
-            if let t = try? url.resourceValues(forKeys: [.contentTypeKey]).contentType {
-                type = t
-            } else {
-                type = .data
-            }
-
-            if type.conforms(to: .movie) || type.conforms(to: .video) {
-                let native = await avDuration(of: containerURL) ?? 0
-                await MainActor.run {
-                    _ = store.addVisualSegment(localURL: containerURL, nativeDuration: native)
-                }
-            } else if type.conforms(to: .image) {
-                await MainActor.run {
-                    _ = store.addVisualSegment(localURL: containerURL, nativeDuration: nil)
-                }
-            } else if type.conforms(to: .audio) {
-                let native = await avDuration(of: containerURL) ?? 0
-                await MainActor.run {
-                    _ = store.addAudioSegment(localURL: containerURL, nativeDuration: native)
-                }
-            }
+        // Import into the library (copies files to Media/<assetID>.<ext>).
+        let libraryURLs = libraryStore.addMedia(urls: urls)
+        guard !libraryURLs.isEmpty else {
+            if let msg = libraryStore.errorMessage { errorMessage = msg }
+            return
         }
-    }
 
-    /// Copy an imported (security-scoped) file into the app container.
-    private static func importCopy(of source: URL) -> URL? {
-        let dir = FileManager.default.temporaryDirectory
-            .appendingPathComponent("TimelineKitImports", isDirectory: true)
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        for libraryURL in libraryURLs {
+            let ext = libraryURL.pathExtension.lowercased()
+            let isVideo = ["mp4", "mov", "m4v", "avi", "mpeg"].contains(ext)
+            let isImage = ["png", "jpg", "jpeg", "heic", "gif", "webp"].contains(ext)
+            let isAudio = ["mp3", "m4a", "wav", "aac", "caf"].contains(ext)
 
-        let ext = source.pathExtension.isEmpty ? "media" : source.pathExtension
-        let dest = dir
-            .appendingPathComponent(UUID().uuidString)
-            .appendingPathExtension(ext)
-        do {
-            try FileManager.default.copyItem(at: source, to: dest)
-            return dest
-        } catch {
-            return nil
+            if isVideo || isImage {
+                let native = isVideo ? (await avDuration(of: libraryURL) ?? 0) : nil
+                await MainActor.run {
+                    _ = store.addVisualSegment(localURL: libraryURL, nativeDuration: native)
+                }
+            } else if isAudio {
+                let native = await avDuration(of: libraryURL) ?? 0
+                await MainActor.run {
+                    _ = store.addAudioSegment(localURL: libraryURL, nativeDuration: native)
+                }
+            } else if let type = try? libraryURL.resourceValues(forKeys: [.contentTypeKey]).contentType {
+                if type.conforms(to: .movie) || type.conforms(to: .video) {
+                    let native = await avDuration(of: libraryURL) ?? 0
+                    await MainActor.run {
+                        _ = store.addVisualSegment(localURL: libraryURL, nativeDuration: native)
+                    }
+                } else if type.conforms(to: .audio) {
+                    let native = await avDuration(of: libraryURL) ?? 0
+                    await MainActor.run {
+                        _ = store.addAudioSegment(localURL: libraryURL, nativeDuration: native)
+                    }
+                }
+            }
         }
     }
 
@@ -210,16 +249,22 @@ public struct ClipEditorView: View {
 /// and its timeline/selection are kept in sync here.
 struct MacEditorShellRepresentable: NSViewRepresentable {
     let store: EditorStore
+    let libraryStore: TimelineLibraryStore
     let timeline: EditorTimeline
     let selection: SelectionState
     let compositionPlayer: AVPlayer?
     let timelinePreviewView: TimelinePreviewView?
+    var onImportMedia: (() -> Void)?
+    var onCreateOrOpenLibrary: (() -> Void)?
 
     func makeNSView(context: Context) -> MacEditorShellView {
         MacEditorShellView(
             store: store,
+            libraryStore: libraryStore,
             compositionPlayer: compositionPlayer,
-            timelinePreviewView: timelinePreviewView
+            timelinePreviewView: timelinePreviewView,
+            onImportMedia: onImportMedia,
+            onCreateOrOpenLibrary: onCreateOrOpenLibrary
         )
     }
 

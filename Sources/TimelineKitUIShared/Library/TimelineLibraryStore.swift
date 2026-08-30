@@ -12,10 +12,17 @@ public final class TimelineLibraryStore {
 
     /// 当前打开的库；nil = 未打开（空态显示"创建资源库"）。
     public private(set) var library: TimelineLibrary?
-    /// 当前库内媒体文件清单（刷新后更新）。
+    /// 当前库内媒体清单（含拍摄日期/类型/时长），从 manifest 读取。
+    public private(set) var mediaEntries: [LibraryMediaEntry] = []
+    /// 当前库内媒体文件清单（刷新后更新，兼容旧消费者）。
     public private(set) var mediaURLs: [URL] = []
     /// 最近一次操作的错误信息（用于弹窗）。
     public var errorMessage: String?
+
+    /// macOS 沙盒：为当前库包持有 security scope（NSSavePanel/NSOpenPanel 返回的
+    /// URL 必须 startAccessingSecurityScopedResource 才能读写）；换库时停止旧的。
+    @ObservationIgnored private var scopedForPackage: URL?
+    @ObservationIgnored private var isAccessingScope = false
 
     public init() {}
 
@@ -27,6 +34,7 @@ public final class TimelineLibraryStore {
     /// 在指定位置创建库并设为当前库。
     public func createLibrary(at packageURL: URL, name: String? = nil) throws {
         let lib = try TimelineLibrary.create(at: packageURL, name: name)
+        activateScope(for: packageURL)
         self.library = lib
         refreshMedia()
     }
@@ -34,16 +42,31 @@ public final class TimelineLibraryStore {
     /// 打开现有库。
     public func openLibrary(at packageURL: URL) throws {
         let lib = try TimelineLibrary.open(at: packageURL)
+        activateScope(for: packageURL)
         self.library = lib
         refreshMedia()
     }
 
+    private func activateScope(for packageURL: URL) {
+        if isAccessingScope, let old = scopedForPackage {
+            old.stopAccessingSecurityScopedResource()
+        }
+        scopedForPackage = packageURL
+        isAccessingScope = packageURL.startAccessingSecurityScopedResource()
+    }
+
+    deinit {
+        if isAccessingScope, let scoped = scopedForPackage {
+            scoped.stopAccessingSecurityScopedResource()
+        }
+    }
+
     // MARK: - Media
 
-    /// 把外部媒体导入当前库（复制进 `Media/`），刷新媒体清单。
-    /// - Returns: 库内媒体 URL；无库或复制失败返回 nil 并设 errorMessage。
+    /// 把外部媒体导入当前库（复制进 `Media/`）+ 更新 manifest，刷新媒体清单。
+    /// - Returns: 库内媒体 URL；无库或复制失败返回空并设 errorMessage。
     @discardableResult
-    public func addMedia(urls: [URL]) -> [URL] {
+    public func addMedia(urls: [URL]) async -> [URL] {
         guard let library else {
             errorMessage = "请先创建或打开资源库"
             return []
@@ -53,7 +76,8 @@ public final class TimelineLibraryStore {
             let accessing = url.startAccessingSecurityScopedResource()
             defer { if accessing { url.stopAccessingSecurityScopedResource() } }
             do {
-                imported.append(try library.importMedia(from: url))
+                let entry = try await library.importMediaEntry(from: url)
+                imported.append(library.mediaFileURL(for: entry))
             } catch {
                 errorMessage = "导入失败：\(url.lastPathComponent) — \(error.localizedDescription)"
             }
@@ -62,9 +86,20 @@ public final class TimelineLibraryStore {
         return imported
     }
 
-    /// 重新枚举库内媒体。
+    /// 重新枚举库内媒体（从 manifest）。
     public func refreshMedia() {
-        mediaURLs = library?.listMediaAssets() ?? []
+        mediaEntries = library?.listMediaManifest() ?? []
+        // 兼容旧的 mediaURLs 消费者。
+        mediaURLs = mediaEntries.map { library!.mediaFileURL(for: $0) }
+    }
+
+    /// 按拍摄日期分组（倒序，最新在前）。每个分组含日期与条目。
+    public var groupedMedia: [(date: Date, items: [LibraryMediaEntry])] {
+        let cal = Calendar.current
+        let groups = Dictionary(grouping: mediaEntries) { entry in
+            cal.startOfDay(for: entry.captureDate)
+        }
+        return groups.sorted { $0.key > $1.key }.map { (date: $0.key, items: $0.value.sorted { $0.captureDate < $1.captureDate }) }
     }
 
     // MARK: - Project

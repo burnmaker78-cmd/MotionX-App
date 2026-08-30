@@ -36,14 +36,14 @@ final class TimelineLibraryTests: XCTestCase {
 
     // MARK: - importMedia
 
-    func testImportMediaCopiesIntoMediaDirectory() throws {
+    func testImportMediaCopiesIntoMediaDirectory() async throws {
         let lib = try TimelineLibrary.create(at: bundleURL)
 
         // Write a fake source file.
         let src = tempDir.appendingPathComponent("clip.mp4")
         try Data("fake".utf8).write(to: src)
 
-        let importedURL = try lib.importMedia(from: src)
+        let importedURL = try await lib.importMedia(from: src)
 
         XCTAssertTrue(FileManager.default.fileExists(atPath: importedURL.path))
         XCTAssertEqual(importedURL.deletingLastPathComponent().lastPathComponent, "Media")
@@ -51,6 +51,43 @@ final class TimelineLibraryTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: src.path))
 
         XCTAssertEqual(lib.listMediaAssets().count, 1)
+    }
+
+    // MARK: - Manifest
+
+    func testImportMediaWritesManifestWithCaptureDate() async throws {
+        let lib = try TimelineLibrary.create(at: bundleURL)
+
+        let src = tempDir.appendingPathComponent("photo.jpg")
+        try Data("fakeimg".utf8).write(to: src)
+
+        let entry = try await lib.importMediaEntry(from: src)
+
+        XCTAssertEqual(lib.listMediaManifest().count, 1)
+        XCTAssertEqual(entry.originalFileName, "photo.jpg")
+        XCTAssertEqual(entry.kind, .image)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: lib.mediaManifestURL.path))
+    }
+
+    // MARK: - Open validation
+
+    func testOpenRejectsPlainFolder() throws {
+        let plainDir = tempDir.appendingPathComponent("plain-folder", isDirectory: true)
+        try FileManager.default.createDirectory(at: plainDir, withIntermediateDirectories: true)
+
+        XCTAssertThrowsError(try TimelineLibrary.open(at: plainDir)) { error in
+            guard case TimelineLibraryError.notABundle = error else {
+                XCTFail("expected notABundle, got \(error)")
+                return
+            }
+        }
+    }
+
+    func testOpenAcceptsCreatedBundle() throws {
+        let lib = try TimelineLibrary.create(at: bundleURL, name: "库")
+        let reopened = try TimelineLibrary.open(at: bundleURL)
+        XCTAssertEqual(reopened.name, "库")
+        _ = lib
     }
 
     // MARK: - Project round-trip
@@ -95,23 +132,37 @@ final class TimelineLibraryStoreTests: XCTestCase {
         XCTAssertTrue(store.mediaURLs.isEmpty)
     }
 
-    func testAddMediaPopulatesLibrary() throws {
+    func testAddMediaPopulatesLibrary() async throws {
         let store = TimelineLibraryStore()
         try store.createLibrary(at: bundleURL)
 
         let src = tempDir.appendingPathComponent("img.png")
         try Data("img".utf8).write(to: src)
 
-        let imported = store.addMedia(urls: [src])
+        let imported = await store.addMedia(urls: [src])
         XCTAssertEqual(imported.count, 1)
         XCTAssertEqual(store.mediaURLs.count, 1)
+        XCTAssertEqual(store.mediaEntries.count, 1)
         XCTAssertTrue(FileManager.default.fileExists(atPath: imported[0].path))
     }
 
-    func testAddMediaWithoutLibraryShowsError() {
+    func testGroupedMediaGroupsByDate() async throws {
+        let store = TimelineLibraryStore()
+        try store.createLibrary(at: bundleURL)
+
+        let pin = tempDir.appendingPathComponent("img.png")
+        try Data("img".utf8).write(to: pin)
+
+        _ = await store.addMedia(urls: [pin])
+        // A single file -> one day group, newest first.
+        XCTAssertEqual(store.groupedMedia.count, 1)
+        XCTAssertEqual(store.groupedMedia.first?.items.count, 1)
+    }
+
+    func testAddMediaWithoutLibraryShowsError() async {
         let store = TimelineLibraryStore()
         let src = URL(fileURLWithPath: "/tmp/none.mp4")
-        let imported = store.addMedia(urls: [src])
+        let imported = await store.addMedia(urls: [src])
         XCTAssertTrue(imported.isEmpty)
         XCTAssertNotNil(store.errorMessage)
     }

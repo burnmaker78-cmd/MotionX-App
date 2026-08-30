@@ -129,16 +129,19 @@ public struct ClipEditorView: View {
     private func presentCreateLibraryPanel() {
         let panel = NSSavePanel()
         panel.title = "创建资源库"
-        panel.nameFieldStringValue = "未命名资源库"
-        panel.canCreateDirectories = true
+        // FCP 一致：默认名带 .tlkbundle 后缀，默认目录为影片。
+        panel.nameFieldStringValue = "未命名.tlkbundle"
+        if let movies = FileManager.default.urls(for: .moviesDirectory, in: .userDomainMask).first {
+            panel.directoryURL = movies
+        }
+                panel.canCreateDirectories = true
         panel.allowedContentTypes = [.folder]
         panel.begin { response in
             guard response == .OK, let url = panel.url else { return }
-            let bundleURL = url.pathExtension.lowercased() == "tlkbundle"
-                ? url
-                : url.appendingPathExtension("tlkbundle")
+            // 直接用 panel.url（已含 .tlkbundle 后缀且被 savePanel 授权）。
+            // 不要在此改后缀——改后缀会让写入落在未授权的路径上。
             do {
-                try self.libraryStore.createLibrary(at: bundleURL)
+                try self.libraryStore.createLibrary(at: url)
             } catch {
                 self.errorMessage = error.localizedDescription
             }
@@ -146,21 +149,35 @@ public struct ClipEditorView: View {
     }
 
     /// NSOpenPanel: pick an existing .tlkbundle and open it.
+    /// `.tlkbundle` is a directory package not registered with the system, so
+    /// NSOpenPanel sees it as a folder — allow directory selection here.
     private func presentOpenLibraryPanel() {
         let panel = NSOpenPanel()
         panel.title = "打开资源库"
         panel.canChooseFiles = true
-        panel.canChooseDirectories = false
+        panel.canChooseDirectories = true
         panel.allowsMultipleSelection = false
+        panel.allowedContentTypes = [.folder]
+        // 只允许 .tlkbundle 项可选（目录包未注册为系统类型，用 delegate 过滤）。
+        panel.delegate = libraryPanelDelegate
         panel.begin { response in
             guard response == .OK, let url = panel.url else { return }
-            do {
-                try self.libraryStore.openLibrary(at: url)
-            } catch {
-                self.errorMessage = error.localizedDescription
-            }
+            self.openLibrary(at: url)
         }
     }
+
+    private func openLibrary(at url: URL) {
+        do {
+            try libraryStore.openLibrary(at: url)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    // MARK: - Library open-panel filtering
+
+    /// Retained so the panel's delegate stays alive during the sheet session.
+    private let libraryPanelDelegate = MacLibraryOpenPanelDelegate()
 
     // MARK: - Add Media
 
@@ -184,7 +201,7 @@ public struct ClipEditorView: View {
         }
 
         // Import into the library (copies files to Media/<assetID>.<ext>).
-        let libraryURLs = libraryStore.addMedia(urls: urls)
+        let libraryURLs = await libraryStore.addMedia(urls: urls)
         guard !libraryURLs.isEmpty else {
             if let msg = libraryStore.errorMessage { errorMessage = msg }
             return

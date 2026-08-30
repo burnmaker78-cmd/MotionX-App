@@ -1,5 +1,36 @@
 import Foundation
+import AVFoundation
+import ImageIO
+import UniformTypeIdentifiers
 import TimelineKitCore
+
+/// 库内一个已导入媒体的清单条目（供 Browser 媒体面板按日期分组展示）。
+///
+/// 库导入把源文件复制为 `Media/<assetID>.<ext>`，源文件名与拍摄日期复制时丢失，
+/// 故在导入时提取并持久化到 `Media/Manifest.json`，使分组与 FCP 一致
+/// （按媒体自身拍摄日期），且库可整体迁移（manifest 跟随库包）。
+public struct LibraryMediaEntry: Codable, Sendable, Hashable, Identifiable {
+    public let id: UUID            // == assetID，也是库内文件名（去扩展名）
+    public let fileName: String    // 库内文件名（含扩展名）
+    public let originalFileName: String
+    public let captureDate: Date   // 拍摄/创建日期（分组依据）
+    public let kind: MediaKind
+    public let duration: Double?   // 视频/音频时长（秒），图片 nil
+
+    public enum MediaKind: String, Codable, Sendable {
+        case image, video, audio, other
+    }
+
+    public init(id: UUID, fileName: String, originalFileName: String,
+                captureDate: Date, kind: MediaKind, duration: Double?) {
+        self.id = id
+        self.fileName = fileName
+        self.originalFileName = originalFileName
+        self.captureDate = captureDate
+        self.kind = kind
+        self.duration = duration
+    }
+}
 
 /// TimelineKit 资源库（Library）—— 自研 `.tlkbundle` 目录包。
 ///
@@ -10,7 +41,8 @@ import TimelineKitCore
 /// mylibrary.tlkbundle/
 /// ├── CurrentVersion.json        # 库元数据（名称/创建时间/格式版本）
 /// ├── Media/                     # 导入媒体的副本（按 assetID 命名，唯一副本）
-/// │   └── <assetID>.<ext>
+/// │   ├── <assetID>.<ext>
+/// │   └── Manifest.json          # 媒体清单（每条含原始文件名/拍摄日期/类型/时长）
 /// ├── Projects/
 /// │   └── <projectID>.tlkproj    # 项目（EditorTimeline JSON 持久化）
 /// └── Events/
@@ -38,6 +70,12 @@ public struct TimelineLibrary: Sendable {
     public var projectsDirectory: URL { packageURL.appendingPathComponent("Projects", isDirectory: true) }
     public var eventsDirectory: URL { packageURL.appendingPathComponent("Events", isDirectory: true) }
     public var metadataURL: URL { packageURL.appendingPathComponent("CurrentVersion.json") }
+    public var mediaManifestURL: URL { mediaDirectory.appendingPathComponent("Manifest.json") }
+
+    /// 库内某个媒体条目的文件 URL（`Media/<assetID>.<ext>`）。
+    public func mediaFileURL(for entry: LibraryMediaEntry) -> URL {
+        mediaDirectory.appendingPathComponent(entry.fileName)
+    }
 
     // MARK: - Create / open
 
@@ -70,6 +108,16 @@ public struct TimelineLibrary: Sendable {
             throw TimelineLibraryError.notABundle(packageURL)
         }
 
+        // 校验是 .tlkbundle 目录包（而非任意文件夹）：包内须有 Media/ 或元数据。
+        let hasMediaDir = fm.fileExists(
+            atPath: packageURL.appendingPathComponent("Media", isDirectory: true).path,
+            isDirectory: &isDir
+        ) && isDir.boolValue
+        let hasMetadata = fm.fileExists(atPath: packageURL.appendingPathComponent("CurrentVersion.json").path)
+        guard hasMediaDir || hasMetadata else {
+            throw TimelineLibraryError.notABundle(packageURL)
+        }
+
         // 读元数据（若缺失则按包名初始化）。
         let name = packageURL.deletingPathExtension().lastPathComponent
         var lib = TimelineLibrary(
@@ -84,13 +132,20 @@ public struct TimelineLibrary: Sendable {
 
     // MARK: - Media import
 
-    /// 把外部媒体复制进库 `Media/`，返回库内 URL。
+    /// 把外部媒体复制进库 `Media/` 并登记到 Manifest，返回库内 URL。
     ///
     /// - Parameter sourceURL: 外部（可能安全作用域）媒体 URL；函数内持作用域复制，
     ///   复制完成即释放。原始文件不改动。
     /// - Returns: 库内 `Media/<assetID>.<ext>` URL。
     @discardableResult
-    public func importMedia(from sourceURL: URL, assetID: UUID = UUID()) throws -> URL {
+    public func importMedia(from sourceURL: URL, assetID: UUID = UUID()) async throws -> URL {
+        let entry = try await importMediaEntry(from: sourceURL, assetID: assetID)
+        return mediaFileURL(for: entry)
+    }
+
+    /// 同 `importMedia`，但返回完整条目（含拍摄日期/类型/时长），用于注册到 Manifest。
+    @discardableResult
+    public func importMediaEntry(from sourceURL: URL, assetID: UUID = UUID()) async throws -> LibraryMediaEntry {
         let accessing = sourceURL.startAccessingSecurityScopedResource()
         defer { if accessing { sourceURL.stopAccessingSecurityScopedResource() } }
 
@@ -98,11 +153,43 @@ public struct TimelineLibrary: Sendable {
             throw TimelineLibraryError.sourceMissing
         }
         let ext = sourceURL.pathExtension.isEmpty ? "media" : sourceURL.pathExtension
-        let dest = mediaDirectory
-            .appendingPathComponent(assetID.uuidString)
-            .appendingPathExtension(ext)
+        let fileName = assetID.uuidString + "." + ext
+        let dest = mediaDirectory.appendingPathComponent(fileName)
         try FileManager.default.copyItem(at: sourceURL, to: dest)
-        return dest
+
+        // 提取拍摄日期（供分组）与时长（供展示）。
+        let kind = Self.mediaKind(for: sourceURL, extension: ext)
+        let duration = await Self.duration(of: sourceURL, kind: kind)
+        let captureDate = await Self.captureDate(of: sourceURL) ?? srcFileCreationDate(sourceURL) ?? Date()
+
+        let entry = LibraryMediaEntry(
+            id: assetID,
+            fileName: fileName,
+            originalFileName: sourceURL.lastPathComponent,
+            captureDate: captureDate,
+            kind: kind,
+            duration: duration
+        )
+        try appendManifest(entry)
+        return entry
+    }
+
+    private func appendManifest(_ entry: LibraryMediaEntry) throws {
+        var entries = listMediaManifest()
+        entries.removeAll { $0.id == entry.id }
+        entries.append(entry)
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .sortedKeys
+        try encoder.encode(entries).write(to: mediaManifestURL, options: .atomic)
+    }
+
+    /// 库内媒体清单（含拍摄日期/类型/时长），按拍摄日期升序。
+    public func listMediaManifest() -> [LibraryMediaEntry] {
+        guard let data = try? Data(contentsOf: mediaManifestURL),
+              let entries = try? JSONDecoder().decode([LibraryMediaEntry].self, from: data) else {
+            return []
+        }
+        return entries.sorted { $0.captureDate < $1.captureDate }
     }
 
     /// 枚举库内已导入的媒体文件。
@@ -111,7 +198,55 @@ public struct TimelineLibrary: Sendable {
             at: mediaDirectory,
             includingPropertiesForKeys: nil,
             options: [.skipsHiddenFiles]
-        )) ?? []
+        ).filter { $0.lastPathComponent != "Manifest.json" }) ?? []
+    }
+
+    // MARK: - Media metadata helpers
+
+    private func srcFileCreationDate(_ url: URL) -> Date? {
+        (try? url.resourceValues(forKeys: [.creationDateKey]))?.creationDate
+    }
+
+    /// 推断媒体类型（按扩展名 / UTType）。
+    private static func mediaKind(for url: URL, extension ext: String) -> LibraryMediaEntry.MediaKind {
+        let ext = ext.lowercased()
+        if ["png", "jpg", "jpeg", "heic", "gif", "webp", "tiff", "bmp"].contains(ext) { return .image }
+        if ["mp4", "mov", "m4v", "avi", "mpeg", "mpg", "mkv"].contains(ext) { return .video }
+        if ["mp3", "m4a", "wav", "aac", "caf", "flac", "aiff"].contains(ext) { return .audio }
+        return .other
+    }
+
+    /// 提取媒体拍摄/创建日期：图片读 EXIF DateTimeOriginal，视频读 AVAsset creationDate，
+    /// 音频/其它回退文件系统 creationDate。
+    private static func captureDate(of url: URL) async -> Date? {
+        // 图片：EXIF DateTimeOriginal
+        if let src = CGImageSourceCreateWithURL(url as CFURL, nil),
+           let props = CGImageSourceCopyPropertiesAtIndex(src, 0, nil) as? [CFString: Any],
+           let exif = props[kCGImagePropertyExifDictionary] as? [CFString: Any],
+           let dt = exif[kCGImagePropertyExifDateTimeOriginal] as? String {
+            let fmt = DateFormatter()
+            fmt.locale = Locale(identifier: "en_US_POSIX")
+            fmt.dateFormat = "yyyy:MM:dd HH:mm:ss"
+            if let d = fmt.date(from: dt) { return d }
+        }
+        // 视频：AVAsset creationDate
+        let asset = AVURLAsset(url: url)
+        if let meta = try? await asset.load(.metadata),
+           let item = meta.first(where: { $0.commonKey == .commonKeyCreationDate }),
+           let str = try? await item.load(.stringValue),
+           let d = DateFormatter().date(from: str) {
+            return d
+        }
+        // 兜底：文件系统 creationDate
+        return (try? url.resourceValues(forKeys: [.creationDateKey]))?.creationDate
+    }
+
+    /// 媒体时长（视频/音频），图片返回 nil。
+    private static func duration(of url: URL, kind: LibraryMediaEntry.MediaKind) async -> Double? {
+        guard kind == .video || kind == .audio else { return nil }
+        let asset = AVURLAsset(url: url)
+        guard let dur = try? await asset.load(.duration), dur.isNumeric, dur.seconds > 0 else { return nil }
+        return dur.seconds
     }
 
     // MARK: - Project persistence

@@ -109,8 +109,7 @@ final class MacBrowserPanelView: NSView {
 
     /// Refresh the sidebar + media panel from the library store state.
     func refresh() {
-        sidebar.setLibraryName(libraryStore.library?.name)
-        sidebar.setProjects(libraryStore.projects)
+        sidebar.refresh(libraryStore)
         mediaPanel.refresh()
     }
 }

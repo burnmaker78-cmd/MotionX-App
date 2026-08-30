@@ -24,9 +24,9 @@ TimelineKit is extracted from the DreamAI app and rebuilt as a standalone
 open-source package under V8. It is actively shaped for external use.
 
 - Swift tools 6.2, iOS 18+, macOS 15+.
-- Editor UI and video export flow are iOS-first. macOS UI support is a shell
-  (planned for future delivery).
-- No test target yet.
+- Editor UI and video export flow are iOS-first; macOS UI is a
+  Final Cut Pro-style four-zone editor (see `TimelineKitUIMac` below).
+- Test target covers Core, Render, UIShared, UISharedViews, and UIMac.
 
 ## Modules (V8)
 
@@ -124,10 +124,39 @@ Depends on UIShared + Render + SwiftUI.
   text, audio, color adjustment, image animation, transitions, TTS, segment
   replace, video trim, and export config.
 
-### `TimelineKitUIMac` — macOS shell
+### `TimelineKitUIMac` — macOS editor (Final Cut Pro-style workbench)
 
-Depends on UIShared + Render + SwiftUI. Shell target for future macOS editor
-delivery. No view files yet.
+Depends on UIShared + Render + SwiftUI / AppKit. A self-contained four-zone
+editor that manages its own resource library and projects — no `EditorStore`
+is injected from outside.
+
+```
+┌──────────────────────────────────────────────────┐
+│  ●●●  TimelineKit       [导入素材] [导出]          │
+├────────────┬───────────┬──────────┬──────────────┤
+│ Browser 左  │ Browser 右│ 预览区    │ 检查器       │
+│ 资源库      │ ▾ 项目 (N)│          │              │
+│ ─────────  │ [项目行]   │ 播放控制  │              │
+│ 导入媒体    │ ▾ 日期 (N)│          │              │
+│ 新建项目    │ [媒体网格] │          │              │
+├────────────┴───────────┴──────────┴──────────────┤
+│  时间线（空/片段 — 从媒体面板拖入素材）             │
+└──────────────────────────────────────────────────┘
+```
+
+- **Resource library** — self-describing `.tlkbundle` package (Media /
+  Projects / manifest). Media is copied into the library, grouped by capture
+  date; original files are never touched.
+- **Projects** — a project *is* a timeline (`EditorTimeline`), persisted under
+  `Projects/`. The library supports multiple projects; click a project row to
+  switch the active timeline.
+- **Workbench flow** — open/create library → import media (library only) →
+  create project (empty timeline) → drag media from the Browser into the
+  timeline → the AppKit canvas inserts it into the main track.
+- **AppKit-first** — `NSSplitView`-based four-zone layout with draggable
+  dividers, `NSCollectionView` media grid, `NSPasteboard` drag-and-drop, and a
+  layer-backed timeline canvas (ruler scrub, click select, trackpad zoom,
+  playhead).
 
 ### `TimelineKit` — Umbrella (backward compatibility)
 
@@ -187,7 +216,7 @@ Sources/
 ├── TimelineKitUIiOS/      iOS editor views
 │   └── Views/             ClipEditorView, TrackCanvasView, panels, CompositionCoordinator
 │
-├── TimelineKitUIMac/      macOS editor shell (stub)
+├── TimelineKitUIMac/      macOS FCP-style editor (library, projects, timeline canvas)
 │
 ├── TimelineKit/           Umbrella — re-exports all sub-modules
 │
@@ -334,9 +363,14 @@ schema.
 ## Current Limitations
 
 - Some historical docs still reference the original DreamAI/DreamLog context.
-- No automated test target yet.
-- `VideoExporter` and `ClipEditorView` are iOS-first; macOS UI is a stub.
-- `TimelineKitUIMac` has no view implementations yet.
+- `VideoExporter` and the iOS `ClipEditorView` are iOS-first; the macOS editor
+  (`TimelineKitUIMac`) is a separate Final Cut Pro-style workbench that shares
+  the same data model and render pipeline.
+- macOS editor thumbnail rendering in the Browser media grid and project rows
+  still uses placeholder color blocks (real thumbnails land in a later
+  iteration).
+- macOS timeline clip editing (trim handles, drag reorder, transitions) is not
+  yet implemented — the canvas currently supports select / scrub / zoom / drop.
 
 ## License
 

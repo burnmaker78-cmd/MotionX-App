@@ -49,7 +49,8 @@ final class MacMediaPanelView: NSView {
 
     private func setupViews() {
         let layout = NSCollectionViewFlowLayout()
-        layout.itemSize = NSSize(width: 100, height: 84)
+        layout.estimatedItemSize = NSSize(width: 100, height: 84)
+//        layout.itemSize = NSSize(width: 100, height: 84)
         layout.minimumInteritemSpacing = 8
         layout.minimumLineSpacing = 8
         // Section header (date) geometry.
@@ -267,11 +268,13 @@ final class MacMediaGridItem: NSCollectionViewItem {
             thumbView.topAnchor.constraint(equalTo: container.topAnchor, constant: 4),
             thumbView.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 4),
             thumbView.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -4),
-            thumbView.heightAnchor.constraint(equalToConstant: 52),
+            thumbView.heightAnchor.constraint(equalToConstant: 68),
+            thumbView.widthAnchor.constraint(equalToConstant: 50),
 
             nameLabel.topAnchor.constraint(equalTo: thumbView.bottomAnchor, constant: 3),
-            nameLabel.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 4),
-            nameLabel.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -4),
+            nameLabel.leadingAnchor.constraint(greaterThanOrEqualTo: container.leadingAnchor, constant: 4),
+            nameLabel.trailingAnchor.constraint(lessThanOrEqualTo: container.trailingAnchor, constant: -4),
+            nameLabel.centerXAnchor.constraint(equalTo: container.centerXAnchor),
             nameLabel.bottomAnchor.constraint(lessThanOrEqualTo: container.bottomAnchor, constant: -4)
         ])
         self.view = container

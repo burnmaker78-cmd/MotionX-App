@@ -86,6 +86,7 @@ final class MacLibrarySidebarView: NSView {
             projectListLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 12),
             projectListLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -12)
         ])
+        
     }
 
     required init?(coder: NSCoder) { fatalError() }
@@ -101,20 +102,41 @@ final class MacLibrarySidebarView: NSView {
         button.translatesAutoresizingMaskIntoConstraints = false
         addSubview(button)
     }
+    
+    func refresh(_ libraryStore: TimelineLibraryStore) {
+        setLibraryName(libraryStore.library?.name)
+        setProjects(libraryStore.projects)
+        
+        if libraryStore.hasLibrary {
+            projectTitleLabel.isHidden = false
+            createProjectButton.isHidden = false
+            projectListLabel.isHidden = false
+        } else {
+            projectTitleLabel.isHidden = true
+            createProjectButton.isHidden = true
+            projectListLabel.isHidden = true
+        }
+    }
 
-    func setLibraryName(_ name: String?) {
+    private func setLibraryName(_ name: String?) {
         libraryNameLabel.stringValue = name ?? "未打开资源库"
     }
 
-    func setProjects(_ projects: [LibraryProject]) {
+    private func setProjects(_ projects: [LibraryProject]) {
         projectListLabel.stringValue = projects.isEmpty
             ? "暂无项目"
             : projects.map(\.name).joined(separator: "\n")
     }
 
-    @objc private func openTapped() { onCreateOrOpenLibrary?() }
-    @objc private func importTapped() { onImportMedia?() }
-    @objc private func createProjectTapped() { onCreateProject?() }
+    @objc private func openTapped() {
+        onCreateOrOpenLibrary?()
+    }
+    @objc private func importTapped() {
+        onImportMedia?()
+    }
+    @objc private func createProjectTapped() {
+        onCreateProject?()
+    }
 }
 
 #endif

@@ -47,19 +47,21 @@ final class MacProjectItem: NSCollectionViewItem {
 
         NSLayoutConstraint.activate([
             thumbView.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 8),
-            thumbView.centerYAnchor.constraint(equalTo: container.centerYAnchor),
+            thumbView.topAnchor.constraint(equalTo: container.topAnchor),
+            thumbView.bottomAnchor.constraint(equalTo: container.bottomAnchor),
             thumbView.widthAnchor.constraint(equalToConstant: 56),
             thumbView.heightAnchor.constraint(equalToConstant: 56),
 
             nameLabel.leadingAnchor.constraint(equalTo: thumbView.trailingAnchor, constant: 10),
             nameLabel.topAnchor.constraint(equalTo: container.topAnchor, constant: 8),
-            nameLabel.trailingAnchor.constraint(lessThanOrEqualTo: container.trailingAnchor, constant: -8),
+            nameLabel.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -8),
+            nameLabel.widthAnchor.constraint(equalToConstant: 100),
 
-            dateLabel.leadingAnchor.constraint(equalTo: thumbView.trailingAnchor, constant: 10),
+            dateLabel.leadingAnchor.constraint(equalTo: nameLabel.leadingAnchor),
             dateLabel.topAnchor.constraint(equalTo: nameLabel.bottomAnchor, constant: 4),
             dateLabel.trailingAnchor.constraint(lessThanOrEqualTo: container.trailingAnchor, constant: -8),
 
-            durationLabel.leadingAnchor.constraint(equalTo: thumbView.trailingAnchor, constant: 10),
+            durationLabel.leadingAnchor.constraint(equalTo: nameLabel.leadingAnchor),
             durationLabel.topAnchor.constraint(equalTo: dateLabel.bottomAnchor, constant: 2),
             durationLabel.trailingAnchor.constraint(lessThanOrEqualTo: container.trailingAnchor, constant: -8)
         ])

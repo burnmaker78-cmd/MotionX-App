@@ -33,12 +33,19 @@ public struct ClipEditorView: View {
     @State private var isImporting = false
     @State private var activeProjectID: UUID?
 
+    /// 自包含工作台：不接收外部 EditorStore，内部创建空 timeline 作为初始状态。
+    /// 用户打开的库、创建/切换的项目均在本视图内部管理。
     public init(
-        store: EditorStore,
         onDraftSave: ((UUID, EditorTimeline) -> Void)? = nil
     ) {
-        _store = State(initialValue: store)
         self.onDraftSave = onDraftSave
+        // 初始 timeline：含主轨骨架的空项目。
+        let canvas = EditorCanvas(width: 1920, height: 1080, fps: 30)
+        var timeline = EditorTimeline(canvas: canvas)
+        if !timeline.tracks.contains(where: { $0.isMainTrack }) {
+            timeline.tracks.append(EditorTrack(id: UUID(), kind: .video, label: "视频", zPosition: 0, segments: [], isMainTrack: true))
+        }
+        _store = State(initialValue: EditorStore(timeline: timeline))
     }
 
     public var body: some View {

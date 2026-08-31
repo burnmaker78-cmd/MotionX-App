@@ -16,14 +16,15 @@ public final class ClipEditorViewController: NSViewController {
 
     // MARK: - Properties
 
-    private var store: EditorStore
-    private let libraryStore: TimelineLibraryStore
-    private var timeline: EditorTimeline
-    private var selection: SelectionState
+    private var store: EditorStore?
+    private var libraryStore: TimelineLibraryStore?
+    private var timeline: EditorTimeline?
+    private var selection: SelectionState?
 
     private var scrollView: NSScrollView!
     private var canvas: TrackCanvasView!
     private var labelsView: TrackLabelsView!
+    private var placeholderView: ClipEditorPlaceholderView!
     private var didInitialLayout = false
 
     /// Guards against re-entrant scroll sync between canvas and labels scroll views.
@@ -49,11 +50,7 @@ public final class ClipEditorViewController: NSViewController {
 
     // MARK: - Init
 
-    public init(store: EditorStore, libraryStore: TimelineLibraryStore) {
-        self.store        = store
-        self.libraryStore = libraryStore
-        self.timeline     = store.timeline
-        self.selection    = store.selection
+    public init() {
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -64,7 +61,28 @@ public final class ClipEditorViewController: NSViewController {
         self.store     = newStore
         self.timeline  = newStore.timeline
         self.selection = newStore.selection
-        apply(timeline: timeline, selection: selection)
+        apply(timeline: newStore.timeline, selection: newStore.selection)
+    }
+
+    /// Inject the library store (needed for drag-and-drop media-file URL resolution).
+    /// Called once by the shell after the VC is created; the library does not change
+    /// on project switches.
+    public func updateLibraryStore(_ newStore: TimelineLibraryStore) {
+        self.libraryStore = newStore
+    }
+
+    // MARK: - Placeholder / editing mode
+
+    /// Switch between the placeholder view ("创建项目" / "项目是一条时间线…")
+    /// and the full editing interface (labels + scroll view + canvas).
+    ///
+    /// Call with `true` when no project is active, `false` once the user
+    /// creates or switches to a project. Views may not be loaded yet — guard.
+    public func setPlaceholderMode(_ show: Bool) {
+        guard scrollView != nil, labelsView != nil, placeholderView != nil else { return }
+        placeholderView.isHidden = !show
+        scrollView.isHidden = show
+        labelsView.isHidden = show
     }
 
     @available(*, unavailable)
@@ -90,6 +108,10 @@ public final class ClipEditorViewController: NSViewController {
         setupGestureRecognizers()
         setupScrollNotifications()
         setupDragAndDrop()
+        setupPlaceholderView()
+
+        // No project is active at launch — default to the placeholder view.
+        setPlaceholderMode(true)
     }
 
     public override func viewDidLayout() {
@@ -98,22 +120,27 @@ public final class ClipEditorViewController: NSViewController {
         updateScrollInsets()
         guard !didInitialLayout else { return }
         didInitialLayout = true
-
-        canvas.configure(timeline: timeline, availableWidth: scrollView.bounds.width)
-        labelsView.configure(tracks: timeline.tracks)
-
-        labelsView.syncContentSize(with: canvas.frame.height)
-        syncLabelScrollOffset()
-        scrollToPlayhead(time: selection.playheadTime, animated: false)
-        syncLabelScrollOffset()
+        if let timeline, let selection {
+            canvas.configure(timeline: timeline, availableWidth: scrollView.bounds.width)
+            labelsView.configure(tracks: timeline.tracks)
+            
+            labelsView.syncContentSize(with: canvas.frame.height)
+            syncLabelScrollOffset()
+            scrollToPlayhead(time: selection.playheadTime, animated: false)
+            syncLabelScrollOffset()
+        }
     }
 
     // MARK: - State Application
 
     public func apply(timeline: EditorTimeline, selection: SelectionState) {
-        let structural = hasStructuralChange(from: self.timeline, to: timeline)
-        let tracksAdded = timeline.tracks.count > self.timeline.tracks.count
-
+        var structural = false
+        var tracksAdded = false
+        if let timeline = self.timeline {
+            structural = hasStructuralChange(from: timeline, to: timeline)
+            tracksAdded = timeline.tracks.count > timeline.tracks.count
+        }
+        
         let appearedSegmentIDs: Set<UUID> = {
             guard structural else { return [] }
             let priorRendered = canvas.renderedSegmentIDs
@@ -144,7 +171,7 @@ public final class ClipEditorViewController: NSViewController {
         canvas.updatePlayhead(time: selection.playheadTime)
         canvas.updateSelection(ids: selection.selectedSegmentIDs)
 
-        if store.isPlaying && !isScrollScrubbing {
+        if let store, store.isPlaying && !isScrollScrubbing {
             scrollToPlayhead(time: selection.playheadTime, animated: false)
         }
     }
@@ -159,6 +186,15 @@ public final class ClipEditorViewController: NSViewController {
     }
 
     // MARK: - View Setups
+    
+    private func setupPlaceholderView() {
+        placeholderView = ClipEditorPlaceholderView()
+        placeholderView.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(placeholderView)
+        
+        placeholderView.centerXAnchor.constraint(equalTo: view.centerXAnchor).isActive = true
+        placeholderView.centerYAnchor.constraint(equalTo: view.centerYAnchor).isActive = true
+    }
 
     private func setupTrackLabels() {
         labelsView = TrackLabelsView()
@@ -174,7 +210,9 @@ public final class ClipEditorViewController: NSViewController {
         ])
 
         labelsView.onAddTrack = { [weak self] kind in
-            self?.store.addTrack(kind: kind, pendingUserCreated: true)
+            if let store = self?.store {
+                store.addTrack(kind: kind, pendingUserCreated: true)
+            }
         }
 
         labelsView.onExpandStateChange = { [weak self] expanded in
@@ -192,18 +230,29 @@ public final class ClipEditorViewController: NSViewController {
         }
 
         labelsView.onToggleLock = { [weak self] id in
-            guard let t = self?.store.timeline.track(id: id) else { return }
-            self?.store.setTrackLocked(id: id, isLocked: !t.isLocked)
+            guard let store = self?.store else {
+                return
+            }
+            guard let t = store.timeline.track(id: id) else {
+                return
+            }
+            store.setTrackLocked(id: id, isLocked: !t.isLocked)
         }
 
         labelsView.onToggleHidden = { [weak self] id in
-            guard let t = self?.store.timeline.track(id: id), !t.isMainTrack else { return }
-            self?.store.setTrackHidden(id: id, isHidden: !t.isHidden)
+            guard let store = self?.store else {
+                return
+            }
+            guard let t = store.timeline.track(id: id), !t.isMainTrack else { return }
+            store.setTrackHidden(id: id, isHidden: !t.isHidden)
         }
 
         labelsView.onToggleMute = { [weak self] id in
-            guard let t = self?.store.timeline.track(id: id) else { return }
-            self?.store.muteTrack(id: id, isMuted: !t.isMuted)
+            guard let store = self?.store else {
+                return
+            }
+            guard let t = store.timeline.track(id: id) else { return }
+            store.muteTrack(id: id, isMuted: !t.isMuted)
         }
     }
 
@@ -234,25 +283,37 @@ public final class ClipEditorViewController: NSViewController {
         scrollView.documentView = canvas
 
         canvas.onTrimCommit = { [weak self] segID, range, newSrcStart in
-            guard let self else { return }
-            self.store.trimSegment(id: segID, newTargetRange: range, newSourceRangeStart: newSrcStart)
-            self.canvas.relayoutSegments(timeline: self.store.timeline)
+            guard let self, let store = self.store else { return }
+            store.trimSegment(id: segID, newTargetRange: range, newSourceRangeStart: newSrcStart)
+            self.canvas.relayoutSegments(timeline: store.timeline)
         }
 
         canvas.onTrimPreview = { [weak self] segID, range in
-            self?.store.previewTrimRange(segmentID: segID, range: range)
+            guard let store = self?.store else {
+                return
+            }
+            store.previewTrimRange(segmentID: segID, range: range)
         }
 
         canvas.onReorderCommit = { [weak self] trackID, newOrder in
-            self?.store.reorderSegments(trackID: trackID, newOrder: newOrder)
+            guard let store = self?.store else {
+                return
+            }
+            store.reorderSegments(trackID: trackID, newOrder: newOrder)
         }
 
         canvas.onMoveCommit = { [weak self] segID, newStart in
-            self?.store.moveSegment(id: segID, to: newStart)
+            guard let store = self?.store else {
+                return
+            }
+            store.moveSegment(id: segID, to: newStart)
         }
 
         canvas.onTransitionTap = { [weak self] leadingID, trailingID, existing in
-            self?.store.selection.editingTransitionContext =
+            guard let store = self?.store else {
+                return
+            }
+            store.selection.editingTransitionContext =
                 TransitionEditContext(leadingID: leadingID, trailingID: trailingID,
                                      existingTransition: existing)
         }
@@ -314,6 +375,8 @@ public final class ClipEditorViewController: NSViewController {
 
         isSyncingScroll = true
         defer { isSyncingScroll = false }
+        
+        guard let timeline, let store else { return }
 
         let currentY = sourceClipView.bounds.origin.y
 
@@ -344,6 +407,9 @@ public final class ClipEditorViewController: NSViewController {
     // MARK: - Gesture Handlers
 
     @objc private func handlePlayheadPan(_ gr: NSPanGestureRecognizer) {
+        
+        guard let store else { return }
+        
         let location = gr.location(in: canvas)
 
         switch gr.state {
@@ -371,6 +437,8 @@ public final class ClipEditorViewController: NSViewController {
     }
 
     @objc private func handleClick(_ gr: NSClickGestureRecognizer) {
+        guard let store else { return }
+        
         let point = gr.location(in: canvas)
         if let segID = canvas.segmentID(at: point) {
             store.selection.selectedSegmentIDs = [segID]
@@ -382,6 +450,7 @@ public final class ClipEditorViewController: NSViewController {
 
     /// AppKit pinch-to-zoom using macOS touchpad native magnification gesture.
     @objc private func handleMagnification(_ gr: NSMagnificationGestureRecognizer) {
+        guard let store, let timeline = timeline, let selection else { return }
         switch gr.state {
         case .began:
             pinchStartPPS      = canvas.currentPixelsPerSecond
@@ -466,6 +535,9 @@ public final class ClipEditorViewController: NSViewController {
     }
 
     private func snapToEdge(_ time: Double) -> Double {
+        guard let timeline else {
+            return 0.0
+        }
         let pps = Double(canvas.currentPixelsPerSecond)
         let threshold = max(0.1, 8.0 / pps)
         let edges: [Double] = timeline.tracks
@@ -487,12 +559,18 @@ public final class ClipEditorViewController: NSViewController {
     }
 
     private func lowerResolution() {
+        guard let store else {
+            return
+        }
         store.coordinatorPlayer?.currentItem?.preferredMaximumResolution = CGSize(width: 960, height: 540)
     }
 
     private func restoreResolution() {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-            self?.store.coordinatorPlayer?.currentItem?.preferredMaximumResolution = .zero
+            guard let store = self?.store else {
+                return
+            }
+            store.coordinatorPlayer?.currentItem?.preferredMaximumResolution = .zero
         }
     }
 
@@ -503,6 +581,9 @@ public final class ClipEditorViewController: NSViewController {
     ///   - main-track drop between clips             → insert at snapped drop time
     ///   - non-main track drop                       → insert onto that track (by kind)
     private func insertDroppedMedia(entry: LibraryMediaEntry, time: Double, dropY: CGFloat) {
+        guard let store, let libraryStore else {
+            return
+        }
         guard let url = libraryStore.library?.mediaFileURL(for: entry) else { return }
         let trackID = canvas.trackID(atY: dropY)
 

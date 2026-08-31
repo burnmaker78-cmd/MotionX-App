@@ -33,7 +33,7 @@ let package = Package(
         ),
         .library(
             name: "TimelineKitUIMac",
-            targets: ["TimelineKitUIMac"]
+            targets: ["TimelineKitUIMac"],
         ),
 
         // MARK: - Umbrella (backward compatibility)

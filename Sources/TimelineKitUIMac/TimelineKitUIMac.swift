@@ -18,8 +18,8 @@ import TimelineKitUISharedViews
 //   - MacLibrarySidebarView     — 资源库侧栏（打开/导入/新建项目）
 //   - MacMediaPanelView         — 媒体面板（项目分组 + 按拍摄日期分组）
 //   - MacInspectorPanelView     — 检查器占位
-//   - TrackEditorRepresentable  — 时间线编辑器（移植自 iOS）：ClipEditorViewController
-//                                  + TrackCanvasView（轨道/片段/缩略图/修剪/拖放）
+//   - ClipEditorViewController  — 时间线编辑器（移植自 iOS）：TrackCanvasView
+//                                  （轨道/片段/缩略图/修剪/拖放）+ 占位/编辑模式
 //   - Views/                    — 移植的 AppKit 时间线视图（BaseFlippedView 翻转坐标系）
 //
 // 顶部导航：标题 + 导入/导出按钮由 ClipEditorView 的 .toolbar 挂到系统

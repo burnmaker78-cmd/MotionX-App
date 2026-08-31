@@ -58,7 +58,8 @@ final class MacEditorShellView: BaseFlippedView {
             onSelectProject: onSelectProject,
             activeProjectID: activeProjectID
         )
-        self.clipEditorVC = ClipEditorViewController(store: store, libraryStore: libraryStore)
+        self.clipEditorVC = ClipEditorViewController()
+        self.clipEditorVC.updateLibraryStore(libraryStore)
         super.init(frame: .zero)
         // 强制深色外观：编辑器整体是深色主题（与 iOS 端 Color(white:0.08) 一致）。
         // 不设置时系统浅色外观会让 windowBackgroundColor 等语义色解析为白色，
@@ -133,9 +134,10 @@ final class MacEditorShellView: BaseFlippedView {
         clipEditorVC.apply(timeline: timeline, selection: selection)
     }
 
-    /// 更新当前活动项目 ID（用于高亮项目行）。
+    /// 更新当前活动项目 ID（用于高亮项目行 + 时间线占位/编辑模式）。
     func updateActiveProject(id: UUID?) {
         topArea.updateActiveProject(id: id)
+        clipEditorVC.setPlaceholderMode(id == nil)
     }
 }
 

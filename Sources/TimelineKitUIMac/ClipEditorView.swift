@@ -32,7 +32,7 @@ public struct ClipEditorView: View {
     @State private var errorMessage: String?
     @State private var isImporting = false
     @State private var activeProjectID: UUID?
-
+    
     /// 自包含工作台：不接收外部 EditorStore，内部创建空 timeline 作为初始状态。
     /// 用户打开的库、创建/切换的项目均在本视图内部管理。
     public init(
@@ -47,7 +47,7 @@ public struct ClipEditorView: View {
         }
         _store = State(initialValue: EditorStore(timeline: timeline))
     }
-
+    
     public var body: some View {
         MacEditorShellRepresentable(
             store: store,
@@ -90,7 +90,7 @@ public struct ClipEditorView: View {
                 .disabled(true)
             }
         }
-                .onAppear {
+        .onAppear {
             coordinator.attach(to: store)
             store.coordinatorPlayer = coordinator.player
             store.coordinator       = coordinator
@@ -147,9 +147,9 @@ public struct ClipEditorView: View {
             Text("项目是一条时间线，你可以在其中排列和编辑媒体。")
         }
     }
-
+    
     // MARK: - Project
-
+    
     private func createProject() {
         let name = newProjectName.isEmpty ? "未命名项目" : newProjectName
         newProjectName = ""
@@ -160,7 +160,7 @@ public struct ClipEditorView: View {
             errorMessage = error.localizedDescription
         }
     }
-
+    
     /// 切换到某项目：用其 timeline 新建 EditorStore 并重新接线 coordinator。
     private func switchTo(project: LibraryProject) {
         let newStore = EditorStore(timeline: project.timeline)
@@ -172,7 +172,7 @@ public struct ClipEditorView: View {
         coordinator.scheduleRebuild(timeline: store.timeline, immediate: true)
         draftStore.bind(to: store)
     }
-
+    
     /// 按项目 ID 切换活动项目（从库加载项目）。
     private func switchToProject(byID id: UUID) {
         do {
@@ -182,9 +182,9 @@ public struct ClipEditorView: View {
             errorMessage = error.localizedDescription
         }
     }
-
+    
     // MARK: - Library panels (AppKit)
-
+    
     /// NSSavePanel: pick a location + name for a new .tlkbundle, then create it.
     private func presentCreateLibraryPanel() {
         let panel = NSSavePanel()
@@ -194,7 +194,7 @@ public struct ClipEditorView: View {
         if let movies = FileManager.default.urls(for: .moviesDirectory, in: .userDomainMask).first {
             panel.directoryURL = movies
         }
-                panel.canCreateDirectories = true
+        panel.canCreateDirectories = true
         panel.allowedContentTypes = [.folder]
         panel.begin { response in
             guard response == .OK, let url = panel.url else { return }
@@ -207,7 +207,7 @@ public struct ClipEditorView: View {
             }
         }
     }
-
+    
     /// NSOpenPanel: pick an existing .tlkbundle and open it.
     /// `.tlkbundle` is a directory package not registered with the system, so
     /// NSOpenPanel sees it as a folder — allow directory selection here.
@@ -225,7 +225,7 @@ public struct ClipEditorView: View {
             self.openLibrary(at: url)
         }
     }
-
+    
     private func openLibrary(at url: URL) {
         do {
             try libraryStore.openLibrary(at: url)
@@ -233,14 +233,14 @@ public struct ClipEditorView: View {
             errorMessage = error.localizedDescription
         }
     }
-
+    
     // MARK: - Library open-panel filtering
-
+    
     /// Retained so the panel's delegate stays alive during the sheet session.
     private let libraryPanelDelegate = MacLibraryOpenPanelDelegate()
-
+    
     // MARK: - Add Media
-
+    
     /// Import URLs into the current library only — media does NOT enter any
     /// project/timeline here. Media reaches a timeline later when the user
     /// drags a media item from the Browser into the timeline (or taps it while
@@ -250,12 +250,12 @@ public struct ClipEditorView: View {
         defer {
             Task { @MainActor in isImporting = false }
         }
-
+        
         // Import into the library (copies files to Media/<assetID>.<ext>).
         _ = await libraryStore.addMedia(urls: urls)
         if let msg = libraryStore.errorMessage { errorMessage = msg }
     }
-
+    
     /// Add a single library media entry into the current project's timeline,
     /// auto-routing by kind. No-op if no active project.
     private func addToCurrentProject(entry: LibraryMediaEntry) {
@@ -271,16 +271,16 @@ public struct ClipEditorView: View {
             break
         }
     }
-
+    
     private func avDuration(of url: URL) async -> Double? {
         let asset = AVURLAsset(url: url)
         guard let dur = try? await asset.load(.duration),
               dur.isNumeric, dur.seconds > 0 else { return nil }
         return dur.seconds
     }
-
+    
     // MARK: - Draft persistence
-
+    
     private func saveDraftAndNotify() {
         let draftID = store.document.id
         let timeline = store.timeline
@@ -309,7 +309,7 @@ struct MacEditorShellRepresentable: NSViewRepresentable {
     var onCreateProject: (() -> Void)?
     var onSelectProject: ((UUID) -> Void)?
     var activeProjectID: UUID?
-
+    
     func makeNSView(context: Context) -> MacEditorShellView {
         MacEditorShellView(
             store: store,
@@ -323,7 +323,7 @@ struct MacEditorShellRepresentable: NSViewRepresentable {
             activeProjectID: activeProjectID
         )
     }
-
+    
     func updateNSView(_ nsView: MacEditorShellView, context: Context) {
         // Sync the backing store (active project may have switched to a NEW
         // EditorStore) so drag/drop and click handlers mutate the CURRENT

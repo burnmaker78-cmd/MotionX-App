@@ -12,7 +12,7 @@ import TimelineKitUIShared
 /// - Right (`MacMediaPanelView`): media grouped by capture date.
 /// - The middle divider is draggable via NSSplitView.
 @MainActor
-final class MacBrowserPanelView: NSView {
+final class MacBrowserPanelView: BaseFlippedView {
 
     // MARK: - Callbacks (forwarded to child views)
 

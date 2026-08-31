@@ -14,7 +14,7 @@ import TimelineKitUISharedViews
 /// (`preferredThicknessFraction`) and min pane widths (`minimumThickness`)
 /// natively — no manual divider math, no setPosition timing issues.
 @MainActor
-final class MacEditorTopAreaView: NSView {
+final class MacEditorTopAreaView: BaseFlippedView {
 
     // MARK: - Minimum pane widths
 

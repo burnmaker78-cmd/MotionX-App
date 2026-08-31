@@ -11,13 +11,13 @@ final class MacProjectItem: NSCollectionViewItem {
 
     static let identifier = NSUserInterfaceItemIdentifier("MacProjectItem")
 
-    private let thumbView = NSView()
+    private let thumbView = BaseFlippedView()
     private let nameLabel = NSTextField(labelWithString: "")
     private let dateLabel = NSTextField(labelWithString: "")
     private let durationLabel = NSTextField(labelWithString: "")
 
     override func loadView() {
-        let container = NSView()
+        let container = BaseFlippedView()
         container.wantsLayer = true
         container.layer?.backgroundColor = NSColor(white: 0.10, alpha: 1).cgColor
         container.layer?.cornerRadius = 4

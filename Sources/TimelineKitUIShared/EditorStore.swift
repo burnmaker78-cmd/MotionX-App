@@ -357,6 +357,42 @@ public final class EditorStore: @MainActor Identifiable {
         return nil
     }
 
+    /// 把素材插入到指定时间（主轨或 overlay 轨），不自动推挤后续片段。
+    ///
+    /// 与 `addVisualSegment` 的区别：明确指定 targetRange.start（而非 append 主轨末尾）。
+    /// 用于"拖放到片段之间"的落点语义。
+    @discardableResult
+    public func insertVisualSegment(localURL: URL, nativeDuration: Double?, at time: Double, targetTrackID: UUID? = nil) -> UUID? {
+        let segmentID = UUID()
+        mutate("插入素材") { tl in
+            let trackIndex: Int?
+            if let targetTrackID {
+                trackIndex = tl.tracks.firstIndex { $0.id == targetTrackID && !$0.isMainTrack && $0.kind == .overlay }
+            } else {
+                trackIndex = tl.tracks.firstIndex(where: { $0.isMainTrack })
+            }
+            let ti: Int
+            if let idx = trackIndex {
+                ti = idx
+            } else {
+                let mainTrack = EditorTrack(id: UUID(), kind: .video, label: "视频", zPosition: 0, isMainTrack: true)
+                tl.tracks.append(mainTrack)
+                ti = tl.tracks.count - 1
+            }
+            let materialID = UUID()
+            let isVideo = nativeDuration != nil
+            let asset = EditorAsset(id: materialID, type: isVideo ? .video : .image, localURL: localURL, nativeDuration: nativeDuration)
+            tl.materials[materialID] = asset
+            let dur = nativeDuration ?? 3.0
+            let segment = EditorSegment(id: segmentID, materialID: materialID, sourceRange: isVideo ? TimeRange(start: 0, duration: dur) : nil, targetRange: TimeRange(start: time, duration: dur), speed: 1.0, content: isVideo ? .video(SegmentContent.VideoContent()) : .image(SegmentContent.ImageContent()))
+            tl.tracks[ti].insert(segment)
+            if tl.tracks[ti].pendingUserCreated {
+                tl.tracks[ti].pendingUserCreated = false
+            }
+        }
+        return timeline.segment(id: segmentID) != nil ? segmentID : nil
+    }
+
     @discardableResult public func addAudioSegment(localURL: URL, nativeDuration: Double, startTime: Double? = nil, targetTrackID: UUID? = nil, ttsSource: SegmentContent.TTSSource? = nil) -> UUID? {
         let assetID = UUID(); let asset = EditorAsset(id: assetID, type: .audio, localURL: localURL, nativeDuration: nativeDuration)
         let segmentID = UUID()

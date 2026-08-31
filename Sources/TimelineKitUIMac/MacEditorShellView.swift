@@ -13,13 +13,13 @@ import TimelineKitUISharedViews
 ///   - top toolbar (MacEditorToolbar)
 ///   - vertical split (NSSplitViewController):
 ///       - top area (MacEditorTopAreaView: Browser | Viewer | Inspector)
-///       - timeline area (MacTimelineCanvasHost + control bar)
+///       - timeline area (ClipEditorViewController + control bar)
 ///
 /// NSSplitViewController + NSSplitViewItem provide the initial proportions
 /// (`preferredThicknessFraction`) and min/max pane sizes (`minimumThickness`)
 /// natively — no manual divider math, no setPosition timing issues.
 @MainActor
-final class MacEditorShellView: NSView {
+final class MacEditorShellView: BaseFlippedView {
 
     // MARK: - Minimum heights
 
@@ -30,7 +30,7 @@ final class MacEditorShellView: NSView {
 
     private let splitController = NSSplitViewController()
     private let topArea: MacEditorTopAreaView
-    private let timelineHost: MacTimelineCanvasHost
+    private let clipEditorVC: ClipEditorViewController
     private let store: EditorStore
 
     // MARK: - Init
@@ -58,7 +58,7 @@ final class MacEditorShellView: NSView {
             onSelectProject: onSelectProject,
             activeProjectID: activeProjectID
         )
-        self.timelineHost = MacTimelineCanvasHost(store: store, libraryStore: libraryStore)
+        self.clipEditorVC = ClipEditorViewController(store: store, libraryStore: libraryStore)
         super.init(frame: .zero)
         // 强制深色外观：编辑器整体是深色主题（与 iOS 端 Color(white:0.08) 一致）。
         // 不设置时系统浅色外观会让 windowBackgroundColor 等语义色解析为白色，
@@ -94,10 +94,8 @@ final class MacEditorShellView: NSView {
         topItem.preferredThicknessFraction = 2.0 / 3.0
         splitController.addSplitViewItem(topItem)
 
-        // Timeline pane.
-        let timelineVC = NSViewController()
-        timelineVC.view = timelineHost
-        let timelineItem = NSSplitViewItem(viewController: timelineVC)
+        // Timeline pane — ClipEditorViewController is itself an NSViewController.
+        let timelineItem = NSSplitViewItem(viewController: clipEditorVC)
         timelineItem.minimumThickness = Self.timelineMinHeight
         timelineItem.preferredThicknessFraction = 1.0 / 3.0
         splitController.addSplitViewItem(timelineItem)
@@ -128,11 +126,11 @@ final class MacEditorShellView: NSView {
 
     /// Update the backing store reference (active project may have changed).
     func updateStore(_ newStore: EditorStore) {
-        timelineHost.updateStore(newStore)
+        clipEditorVC.updateStore(newStore)
     }
 
     func apply(timeline: EditorTimeline, selection: SelectionState) {
-        timelineHost.apply(timeline: timeline, selection: selection)
+        clipEditorVC.apply(timeline: timeline, selection: selection)
     }
 
     /// 更新当前活动项目 ID（用于高亮项目行）。

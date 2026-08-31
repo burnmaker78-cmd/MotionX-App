@@ -8,7 +8,7 @@ import AppKit
 /// UI-structure milestone: shows the panel chrome + empty state only. The real
 /// property form (driven by the selected segment) lands in a later iteration.
 @MainActor
-final class MacInspectorPanelView: NSView {
+final class MacInspectorPanelView: BaseFlippedView {
 
     private let titleLabel = NSTextField(labelWithString: "检查器")
     private let emptyLabel = NSTextField(labelWithString: "选择片段后显示属性\n位置 / 缩放 / 旋转 / 不透明度")

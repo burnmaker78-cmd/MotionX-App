@@ -7,7 +7,7 @@ import TimelineKitUIShared
 /// 展示当前库名、"智能精选"、日期事件分组（按媒体分组日期派生的年份/日期列表）。
 /// 选中一个事件时，右栏媒体面板聚焦该日期分组。
 @MainActor
-final class MacLibrarySidebarView: NSView {
+final class MacLibrarySidebarView: BaseFlippedView {
 
     // MARK: - Callbacks
 

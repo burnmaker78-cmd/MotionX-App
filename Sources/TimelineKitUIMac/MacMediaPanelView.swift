@@ -8,7 +8,7 @@ import TimelineKitUIShared
 /// FCP 风格：折叠式日期头（"2026年4月28日 (1)"）+ 每组的缩略图网格。
 /// 数据源为 `TimelineLibraryStore.groupedMedia`（按拍摄日期倒序分组）。
 @MainActor
-final class MacMediaPanelView: NSView {
+final class MacMediaPanelView: BaseFlippedView {
 
     // MARK: - Callbacks
 
@@ -249,7 +249,7 @@ final class MacMediaGridItem: NSCollectionViewItem {
     private let nameLabel = NSTextField(labelWithString: "")
 
     override func loadView() {
-        let container = NSView()
+        let container = BaseFlippedView()
         container.wantsLayer = true
         container.layer?.backgroundColor = NSColor(white: 0.12, alpha: 1).cgColor
         container.layer?.cornerRadius = 4
@@ -298,7 +298,7 @@ final class MacMediaGridItem: NSCollectionViewItem {
 // MARK: - MacMediaSectionHeader
 
 @MainActor
-final class MacMediaSectionHeader: NSView {
+final class MacMediaSectionHeader: BaseFlippedView {
     static let identifier = NSUserInterfaceItemIdentifier("MacMediaSectionHeader")
 
     var onToggle: (() -> Void)?
@@ -307,7 +307,7 @@ final class MacMediaSectionHeader: NSView {
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         wantsLayer = true
-        let bg = NSView()
+        let bg = BaseFlippedView()
         bg.wantsLayer = true
         bg.layer?.backgroundColor = NSColor(white: 0.10, alpha: 1).cgColor
         bg.translatesAutoresizingMaskIntoConstraints = false
@@ -348,7 +348,7 @@ final class MacMediaSectionHeader: NSView {
 
 /// "项目 (N)" 分组头（项目 section 的 header）。
 @MainActor
-final class MacProjectSectionHeader: NSView {
+final class MacProjectSectionHeader: BaseFlippedView {
     static let identifier = NSUserInterfaceItemIdentifier("MacProjectHeader")
 
     private let titleLabel = NSTextField(labelWithString: "")
@@ -356,7 +356,7 @@ final class MacProjectSectionHeader: NSView {
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         wantsLayer = true
-        let bg = NSView()
+        let bg = BaseFlippedView()
         bg.wantsLayer = true
         bg.layer?.backgroundColor = NSColor(white: 0.10, alpha: 1).cgColor
         bg.translatesAutoresizingMaskIntoConstraints = false

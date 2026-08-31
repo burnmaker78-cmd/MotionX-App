@@ -1610,7 +1610,7 @@ enum SubtitleLayerBuilder {
 #if canImport(UIKit)
         textLayer.contentsScale = UIScreen.main.scale
 #else
-        textLayer.contentsScale = 2
+        textLayer.contentsScale = NSScreen.main?.backingScaleFactor ?? 2.0
 #endif
         textLayer.isWrapped     = true
         textLayer.truncationMode = .none

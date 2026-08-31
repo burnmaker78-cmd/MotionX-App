@@ -712,7 +712,3 @@ public struct TransitionEditContext: Sendable, Equatable {
 extension SegmentContent {
     var textContent: TextContent? { if case .text(let c) = self { return c }; return nil }
 }
-
-private extension Double {
-    func clamped(to range: ClosedRange<Double>) -> Double { Swift.min(Swift.max(self, range.lowerBound), range.upperBound) }
-}

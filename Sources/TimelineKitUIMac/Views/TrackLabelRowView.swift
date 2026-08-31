@@ -5,6 +5,8 @@
 //  Created by xiaoyuan on 2026/8/31.
 //
 
+#if canImport(AppKit)
+
 import AppKit
 import TimelineKitCore
 
@@ -303,3 +305,5 @@ final class TrackLabelRowView: BaseFlippedView {
         }
     }
 }
+
+#endif

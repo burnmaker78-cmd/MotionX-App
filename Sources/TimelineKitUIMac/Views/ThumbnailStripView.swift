@@ -5,6 +5,8 @@
 //  Created by xiaoyuan on 2026/8/31.
 //
 
+#if canImport(AppKit)
+
 import AppKit
 import TimelineKitCore
 import TimelineKitUISharedViews
@@ -99,3 +101,5 @@ final class ThumbnailStripView: BaseFlippedView {
         // CATiledLayer 自身按需绘制，无显式 Task 列表需要取消；调用点保留兼容。
     }
 }
+
+#endif

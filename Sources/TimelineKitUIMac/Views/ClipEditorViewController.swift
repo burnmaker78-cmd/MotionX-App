@@ -5,6 +5,8 @@
 //  Created by xiaoyuan on 2026/8/31.
 //
 
+#if canImport(AppKit)
+
 import AppKit
 import TimelineKitCore
 import TimelineKitRender
@@ -636,3 +638,5 @@ private final class FlippedContainerView: BaseFlippedView {}
 private final class FlippedClipView: NSClipView {
     override var isFlipped: Bool { true }
 }
+
+#endif

@@ -5,6 +5,8 @@
 //  Created by xiaoyuan on 2026/8/31.
 //
 
+#if canImport(AppKit)
+
 import AppKit
 
 class BaseFlippedView: NSView {
@@ -15,3 +17,5 @@ class BaseFlippedView: NSView {
         return true
     }
 }
+
+#endif

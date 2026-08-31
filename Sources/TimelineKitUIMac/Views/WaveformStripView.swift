@@ -5,6 +5,8 @@
 //  Created by xiaoyuan on 2026/8/31.
 //
 
+#if canImport(AppKit)
+
 import AppKit
 import TimelineKitRender
 
@@ -95,3 +97,5 @@ final class WaveformStripView: BaseFlippedView {
         return path
     }
 }
+
+#endif

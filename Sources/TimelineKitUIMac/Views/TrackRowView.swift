@@ -5,6 +5,8 @@
 //  Created by xiaoyuan on 2026/8/31.
 //
 
+#if canImport(AppKit)
+
 import AppKit
 import TimelineKitCore
 import AppKit
@@ -575,3 +577,5 @@ final class TrackRowView: BaseFlippedView {
         return !siblings.contains { $0.start < end - 0.001 && $0.end > start + 0.001 }
     }
 }
+
+#endif

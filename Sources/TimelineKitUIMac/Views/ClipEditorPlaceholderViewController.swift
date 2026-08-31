@@ -5,6 +5,8 @@
 //  Created by xiaoyuan on 2026/8/31.
 //
 
+#if canImport(AppKit)
+
 import AppKit
 
 class ClipEditorPlaceholderView: BaseFlippedView {
@@ -54,3 +56,5 @@ class ClipEditorPlaceholderView: BaseFlippedView {
         
     }
 }
+
+#endif

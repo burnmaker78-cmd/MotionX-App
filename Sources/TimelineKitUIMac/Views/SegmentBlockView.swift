@@ -5,6 +5,8 @@
 //  Created by xiaoyuan on 2026/8/31.
 //
 
+#if canImport(AppKit)
+
 import AppKit
 import TimelineKitCore
 
@@ -596,3 +598,5 @@ extension SegmentBlockView: NSGestureRecognizerDelegate {
         return true
     }
 }
+
+#endif

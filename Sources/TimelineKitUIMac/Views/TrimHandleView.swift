@@ -5,6 +5,8 @@
 //  Created by xiaoyuan on 2026/8/31.
 //
 
+#if canImport(AppKit)
+
 import AppKit
 
 // MARK: - TrimHandleView
@@ -61,3 +63,5 @@ final class TrimHandleView: BaseFlippedView {
         : NSColor.white.withAlphaComponent(0.5).cgColor
     }
 }
+
+#endif

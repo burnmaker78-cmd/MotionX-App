@@ -5,6 +5,8 @@
 //  Created by xiaoyuan on 2026/8/31.
 //
 
+#if canImport(AppKit)
+
 import AppKit
 import TimelineKitUISharedViews
 
@@ -82,3 +84,5 @@ final class RulerView: BaseFlippedView {
         return String(format: "%d:%02d", m, sec)
     }
 }
+
+#endif

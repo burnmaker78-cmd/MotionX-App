@@ -5,6 +5,7 @@
 //  Created by xiaoyuan on 2026/8/31.
 //
 
+#if canImport(AppKit)
 import AppKit
 import os
 import TimelineKitCore
@@ -507,3 +508,4 @@ final class TrackCanvasView: BaseFlippedView {
     }
 }
 
+#endif

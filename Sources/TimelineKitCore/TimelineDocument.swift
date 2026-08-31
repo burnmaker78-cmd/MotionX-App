@@ -525,7 +525,8 @@ public final class TimelineDocument: Identifiable {
     }
 
     public func cancelPendingCleanup(for trackID: UUID) {
-        pendingCleanupTasks[trackID]?.cancel(); pendingCleanupTasks[trackID] = nil
+        pendingCleanupTasks[trackID]?.cancel()
+        pendingCleanupTasks[trackID] = nil
     }
 
     // MARK: - Preview / Commit Methods
@@ -691,11 +692,21 @@ public struct SelectionState: Sendable {
     public var editingSegmentID: UUID?
     public var editingTransitionContext: TransitionEditContext?
 
-    public var hasSingleSelection: Bool { selectedSegmentIDs.count == 1 }
-    public var singleSelectedID: UUID? { hasSingleSelection ? selectedSegmentIDs.first : nil }
+    public var hasSingleSelection: Bool {
+        selectedSegmentIDs.count == 1
+    }
+    public var singleSelectedID: UUID? {
+        hasSingleSelection ? selectedSegmentIDs.first : nil
+    }
 
-    public mutating func selectOnly(_ id: UUID) { selectedSegmentIDs = [id]; editingSegmentID = id }
-    public mutating func deselect() { selectedSegmentIDs.removeAll(); editingSegmentID = nil }
+    public mutating func selectOnly(_ id: UUID) {
+        selectedSegmentIDs = [id]
+        editingSegmentID = id
+    }
+    public mutating func deselect() {
+        selectedSegmentIDs.removeAll()
+        editingSegmentID = nil
+    }
 }
 
 // MARK: - TransitionEditContext

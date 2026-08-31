@@ -59,9 +59,14 @@ public final class ClipEditorViewController: NSViewController {
     /// Update the backing EditorStore reference (active project switch creates a
     /// NEW EditorStore). Without this, canvas interactions keep mutating the old
     /// project's timeline.
+    ///
+    /// IMPORTANT: do NOT pre-assign `self.timeline` here — `apply` must compare
+    /// against the OLD timeline (its stored value) to detect a project switch
+    /// (new timeline id / new track ids) and rebuild the canvas. Pre-assigning
+    /// would make `apply` see "old == new" and skip the rebuild, leaving
+    /// `trackRows` keyed by stale ids (no segments visible).
     public func updateStore(_ newStore: EditorStore) {
         self.store     = newStore
-        self.timeline  = newStore.timeline
         self.selection = newStore.selection
         apply(timeline: newStore.timeline, selection: newStore.selection)
     }
@@ -138,9 +143,17 @@ public final class ClipEditorViewController: NSViewController {
     public func apply(timeline: EditorTimeline, selection: SelectionState) {
         var structural = false
         var tracksAdded = false
-        if let timeline = self.timeline {
-            structural = hasStructuralChange(from: timeline, to: timeline)
-            tracksAdded = timeline.tracks.count > timeline.tracks.count
+        if let oldTimeline = self.timeline {
+            // 项目切换 = 新 EditorStore = 新 timeline/轨道 id。trackRows 字典仍持
+            // 旧 id，relayoutSegments 用新 id 查不到旧行 → 必须全量重建画布。
+            // 轨道 id 变化已含在 hasStructuralChange；timeline.id 变化再兜底一次。
+            structural = oldTimeline.id != timeline.id
+                || hasStructuralChange(from: oldTimeline, to: timeline)
+            tracksAdded = timeline.tracks.count > oldTimeline.tracks.count
+        } else {
+            // 首次应用（占位模式 → 第一个项目）：self.timeline 为 nil，无法比较，
+            // 直接按结构性重建（trackRows 尚未创建任何行）。
+            structural = true
         }
         
         let appearedSegmentIDs: Set<UUID> = {
@@ -219,9 +232,11 @@ public final class ClipEditorViewController: NSViewController {
 
         labelsView.onExpandStateChange = { [weak self] expanded in
             guard let self else { return }
-            self.labelsWidthConstraint.constant = expanded
-                ? TrackLabelsView.expandedWidth
-                : TrackLabelsView.collapsedWidth
+            if let labelsWidthConstraint = self.labelsWidthConstraint {
+                labelsWidthConstraint.constant = expanded
+                    ? TrackLabelsView.expandedWidth
+                    : TrackLabelsView.collapsedWidth
+            }
 
             NSAnimationContext.runAnimationGroup { context in
                 context.duration = 0.25

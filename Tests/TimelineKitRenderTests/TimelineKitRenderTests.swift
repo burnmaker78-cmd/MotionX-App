@@ -1,11 +1,12 @@
 import XCTest
 import CoreGraphics
 import CoreImage
+import CoreMedia
 import CoreVideo
 import ImageIO
 import UniformTypeIdentifiers
 import TimelineKitCore
-import TimelineKitRender
+@testable import TimelineKitRender
 
 /// macOS smoke tests for TimelineKitRender.
 ///
@@ -181,5 +182,85 @@ final class TimelineKitRenderTests: XCTestCase {
         // Give the (now-invalidated) timer a moment — count must not grow.
         try? await Task.sleep(nanoseconds: 150_000_000)
         XCTAssertEqual(tickCount, countAfterStop, "onTick kept firing after stop()")
+    }
+
+    // MARK: - ImageLayerComposer orientation
+
+    /// 写一张带 EXIF orientation 的 JPEG（模拟 iPhone 竖拍：像素横 + orientation=6）。
+    private func makeJPEG(width: Int, height: Int, orientation: UInt32) throws -> URL {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ilc-orient-\(UUID().uuidString).jpg")
+        let ctx = CGContext(
+            data: nil, width: width, height: height,
+            bitsPerComponent: 8, bytesPerRow: 0,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        )!
+        ctx.setFillColor(CGColor(red: 0.2, green: 0.6, blue: 0.3, alpha: 1))
+        ctx.fill(CGRect(x: 0, y: 0, width: width, height: height))
+        let image = ctx.makeImage()!
+        let dest = CGImageDestinationCreateWithURL(url as CFURL, UTType.jpeg.identifier as CFString, 1, nil)!
+        CGImageDestinationAddImage(dest, image, [kCGImagePropertyOrientation: orientation] as CFDictionary)
+        XCTAssertTrue(CGImageDestinationFinalize(dest))
+        return url
+    }
+
+    /// 竖拍照片（像素横 4032×3024 + orientation=6）经 ImageLayerComposer 后
+    /// extent 应为竖屏（高 > 宽）——EXIF orientation 已应用。
+    func testImageLayerComposerAppliesEXIFOrientation() throws {
+        let url = try makeJPEG(width: 4032, height: 3024, orientation: 6)
+        // contain 模式不裁剪到画布，结果 extent 保持图片显示比例 → 可断言方向。
+        let spec = ImageLayerSpec(
+            imageURL: url,
+            renderSize: CGSize(width: 1080, height: 1080),
+            contentMode: .contain,
+            timeRange: CMTimeRange(start: .zero, duration: CMTime(seconds: 3, preferredTimescale: 600))
+        )
+        let out = ImageLayerComposer.evaluate(spec: spec, at: CMTime(seconds: 1, preferredTimescale: 600))
+        XCTAssertNotNil(out)
+        guard let out else { return }
+        XCTAssertGreaterThan(out.extent.height, out.extent.width,
+                             "EXIF-rotated portrait photo should render with portrait extent (orientation applied)")
+    }
+
+    /// 对照：orientation=1（横拍）→ extent 横屏（宽 > 高）。
+    func testImageLayerComposerKeepsLandscapeOrientation() throws {
+        let url = try makeJPEG(width: 4032, height: 3024, orientation: 1)
+        let spec = ImageLayerSpec(
+            imageURL: url,
+            renderSize: CGSize(width: 1080, height: 1080),
+            contentMode: .contain,
+            timeRange: CMTimeRange(start: .zero, duration: CMTime(seconds: 3, preferredTimescale: 600))
+        )
+        let out = ImageLayerComposer.evaluate(spec: spec, at: CMTime(seconds: 1, preferredTimescale: 600))
+        XCTAssertNotNil(out)
+        guard let out else { return }
+        XCTAssertGreaterThan(out.extent.width, out.extent.height,
+                             "landscape photo should render with landscape extent")
+    }
+
+    // MARK: - Video preferredTransform coordinate conversion
+
+    /// 竖拍视频（自然 1920×1080 + AVFoundation orientation-6 风格 transform）经
+    /// 坐标系转换后，应把自然横屏矩形映射为竖屏显示矩形（宽 1080 / 高 1920），
+    /// 且不引入上下颠倒（转换 ≠ 原矩阵）。
+    func testVideoDisplayTransformConvertsToCIImageCoordinates() {
+        // 典型竖拍后置摄像头 transform（AVFoundation 左上原点坐标系）。
+        let avTransform = CGAffineTransform(a: 0, b: 1, c: -1, d: 0, tx: 1080, ty: 0)
+        let converted = videoDisplayTransformForCIImage(avTransform, naturalHeight: 1080)
+
+        // 与直接应用原矩阵不同（原矩阵在 CIImage 左下原点会导致上下颠倒）。
+        XCTAssertNotEqual(converted, avTransform, "converted transform must differ from the raw AVFoundation transform")
+
+        // 自然横屏矩形应用转换后 → 竖屏显示矩形。
+        let natural = CGRect(x: 0, y: 0, width: 1920, height: 1080)
+        let display = natural.applying(converted)
+        XCTAssertEqual(display.width, 1080, accuracy: 0.001, "display width should be the natural height")
+        XCTAssertEqual(display.height, 1920, accuracy: 0.001, "display height should be the natural width")
+    }
+
+    /// identity transform（横拍视频）→ 转换后仍为 identity（不改变帧）。
+    func testVideoDisplayTransformIdentityPassthrough() {
+        XCTAssertEqual(videoDisplayTransformForCIImage(.identity, naturalHeight: 1080), .identity)
     }
 }

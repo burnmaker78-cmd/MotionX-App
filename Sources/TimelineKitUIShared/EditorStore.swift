@@ -2,6 +2,8 @@ import Foundation
 import Observation
 import AVFoundation
 import CoreMedia
+import ImageIO
+import UniformTypeIdentifiers
 import TimelineKitCore
 import TimelineKitRender
 
@@ -316,6 +318,9 @@ public final class EditorStore: @MainActor Identifiable {
 
     @discardableResult public func addVisualSegment(localURL: URL, nativeDuration: Double?, targetTrackID: UUID? = nil) -> UUID? {
         let segmentID = UUID(); let playheadTime = selection.playheadTime
+        // 画布未定型（时间线无任何片段）→ 首个视觉片段加入后按媒体实际
+        // 尺寸/帧率调整画布（FCP 行为）。异步触发，见 adjustCanvasForFirstClipIfNeeded。
+        let timelineWasEmpty = timeline.tracks.allSatisfy { $0.segments.isEmpty }
         mutate("添加素材") { tl in
             let trackIndex: Int?
             if let targetTrackID {
@@ -346,6 +351,10 @@ public final class EditorStore: @MainActor Identifiable {
             }
         }
         if timeline.segment(id: segmentID) != nil {
+            if timelineWasEmpty {
+                // 首个视觉片段：异步读取媒体尺寸/帧率并定型画布。
+                Task { await adjustCanvasForFirstClipIfNeeded(localURL: localURL) }
+            }
             if let targetTrackID {
                 document.cancelPendingCleanup(for: targetTrackID)
             }
@@ -355,6 +364,61 @@ public final class EditorStore: @MainActor Identifiable {
             return segmentID
         }
         return nil
+    }
+
+    // MARK: - Smart Canvas (first-clip sizing, FCP behavior)
+
+    /// 首个视觉片段定型画布：时间线无任何片段时，按媒体实际尺寸/帧率调整
+    /// 画布；已有片段后画布固定不再调整（调用方无需判断，方法内部双重检查）。
+    ///
+    /// - 图片：ImageIO 读像素宽高，fps 保持不变。
+    /// - 视频：AVAsset visual track 读 naturalSize（应用 preferredTransform，
+    ///   处理 iPhone 竖拍旋转元数据）+ nominalFrameRate（四舍五入）。
+    /// - 宽高偶数化（H.264 编码要求）。
+    public func adjustCanvasForFirstClipIfNeeded(localURL: URL) async {
+        // 画布已定型（除首个片段外还有其他片段）→ 不调整。
+        // 注：调用时机是首个片段刚加入（count == 1），不能要求"完全无片段"。
+        guard timeline.tracks.flatMap({ $0.segments }).count <= 1 else { return }
+        guard let dims = await Self.readMediaDimensions(url: localURL) else { return }
+        mutate("调整画布") { tl in
+            // 双重检查：异步读取期间用户可能已加更多片段。
+            guard tl.tracks.flatMap({ $0.segments }).count <= 1 else { return }
+            let w = max(dims.width - (dims.width % 2), 2)
+            let h = max(dims.height - (dims.height % 2), 2)
+            tl.canvas = EditorCanvas(width: w, height: h, fps: dims.fps)
+        }
+    }
+
+    /// 读取媒体显示尺寸与帧率（图片 ImageIO / 视频 AVAsset）。
+    /// 音频文件返回 nil（不调整画布）。
+    static func readMediaDimensions(url: URL) async -> (width: Int, height: Int, fps: Int)? {
+        // 图片：ImageIO 像素宽高 + EXIF 方向。
+        if let src = CGImageSourceCreateWithURL(url as CFURL, nil),
+           let typeID = CGImageSourceGetType(src),
+           UTType(typeID as String)?.conforms(to: .image) == true,
+           let props = CGImageSourceCopyPropertiesAtIndex(src, 0, nil) as? [CFString: Any],
+           let w = props[kCGImagePropertyPixelWidth] as? Int,
+           let h = props[kCGImagePropertyPixelHeight] as? Int,
+           w > 0, h > 0 {
+            // EXIF orientation 5–8：像素旋转 90°/270°，显示宽高互换
+            // （竖拍照片像素是横的 + orientation 标记）。
+            let raw = props[kCGImagePropertyOrientation] as? UInt32 ?? 1
+            let rotated90 = (5...8).contains(Int(raw))
+            return rotated90 ? (h, w, 30) : (w, h, 30)
+        }
+        // 视频：visual track 的显示尺寸（应用旋转元数据）+ 帧率。
+        let asset = AVURLAsset(url: url)
+        guard let tracks = try? await asset.loadTracks(withMediaType: .video),
+              let track = tracks.first else { return nil }
+        guard let size = try? await track.load(.naturalSize),
+              let transform = try? await track.load(.preferredTransform) else { return nil }
+        let displayed = size.applying(transform)
+        let w = Int(abs(displayed.width))
+        let h = Int(abs(displayed.height))
+        guard w > 0, h > 0 else { return nil }
+        let nominal = (try? await track.load(.nominalFrameRate)) ?? 0
+        let fps = nominal > 0 ? Int(nominal.rounded()).clamped(to: 10...120) : 30
+        return (w, h, fps)
     }
 
     /// 把素材插入到指定时间（主轨或 overlay 轨），不自动推挤后续片段。

@@ -36,13 +36,14 @@ actor StaticImageRenderer {
             return cached
         }
 
-        let cgImage = try await downloadCGImage(from: imageURL)
+        let (cgImage, orientation) = try await downloadCGImage(from: imageURL)
 
         let outURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("img_\(key).mp4")
 
         try await writeVideo(
             cgImage:      cgImage,
+            orientation:  orientation,
             imageContent: imageContent,
             to:           outURL,
             duration:     duration,
@@ -74,7 +75,9 @@ actor StaticImageRenderer {
 
     // MARK: - Private: download
 
-    private func downloadCGImage(from url: URL) async throws -> CGImage {
+    /// 读取图片像素与 EXIF 方向（竖拍照片像素是横的 + orientation 标记，
+    /// 必须应用方向否则渲染为横屏）。
+    private func downloadCGImage(from url: URL) async throws -> (image: CGImage, orientation: CGImagePropertyOrientation) {
         let data: Data
         if url.isFileURL {
             data = try Data(contentsOf: url)
@@ -86,13 +89,20 @@ actor StaticImageRenderer {
               let img = CGImageSourceCreateImageAtIndex(src, 0, nil) else {
             throw RendererError.downloadFailed
         }
-        return img
+        var orientation: CGImagePropertyOrientation = .up
+        if let props = CGImageSourceCopyPropertiesAtIndex(src, 0, nil) as? [CFString: Any],
+           let raw = props[kCGImagePropertyOrientation] as? UInt32,
+           let o = CGImagePropertyOrientation(rawValue: raw) {
+            orientation = o
+        }
+        return (img, orientation)
     }
 
     // MARK: - Private: video writer
 
     private func writeVideo(
         cgImage:      CGImage,
+        orientation:  CGImagePropertyOrientation,
         imageContent: SegmentContent.ImageContent,
         to outURL:    URL,
         duration:     Double,
@@ -135,7 +145,9 @@ actor StaticImageRenderer {
         }
 
         // ── Base cover-fit scale (same math as ImageVideoGenerator) ──────────
-        let imageSize  = CGSize(width: cgImage.width, height: cgImage.height)
+        // 应用 EXIF orientation：竖拍照片像素是横的，必须先定向再算显示尺寸。
+        let ciImage    = CIImage(cgImage: cgImage).oriented(forExifOrientation: Int32(orientation.rawValue))
+        let imageSize  = ciImage.extent.size
         let scaleX     = renderSize.width  / imageSize.width
         let scaleY     = renderSize.height / imageSize.height
         let isContain  = imageContent.fit == .contain
@@ -155,7 +167,6 @@ actor StaticImageRenderer {
         let baseCenterX = (scaledW - renderSize.width)  / 2
         let baseCenterY = (scaledH - renderSize.height) / 2
 
-        let ciImage    = CIImage(cgImage: cgImage)
         let totalFrames = max(2, Int(ceil(duration * writeFPS)))
         let timescale   = CMTimeScale(600)
 

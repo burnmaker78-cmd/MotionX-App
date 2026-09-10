@@ -5,6 +5,44 @@ import CoreVideo
 
 // MARK: - VideoFrameProviderProtocol
 
+/// 把 AVFoundation 的 `preferredTransform` 应用到 CIImage。
+///
+/// 关键：`preferredTransform` 定义在**左上原点**坐标系（AVFoundation），而
+/// CIImage 是**左下原点**。直接应用会引入 y 轴翻转错误（竖拍视频表现为上下
+/// 颠倒）。用共轭变换 `F·t·F`（F = 垂直翻转 y → H−y，对合）把它转换到
+/// CIImage 坐标系，等价于"先翻到左上原点、应用 t、再翻回左下原点"。
+///
+/// 推导结果（H = 自然方向高度，即 image.extent.height）：
+///   a' = a, b' = −b, c' = −c, d' = d, tx' = c·H + tx, ty' = H − d·H − ty
+private func applyPreferredTransform(_ image: CIImage, _ t: CGAffineTransform) -> CIImage {
+    let converted = videoDisplayTransformForCIImage(t, naturalHeight: image.extent.height)
+    guard converted != .identity else { return image }
+    let rotated = image.transformed(by: converted)
+    let o = rotated.extent.origin
+    guard o != .zero else { return rotated }
+    return rotated.transformed(by: CGAffineTransform(translationX: -o.x, y: -o.y))
+}
+
+/// 把 AVFoundation（左上原点）的 `preferredTransform` 转换到 CIImage（左下原点）
+/// 坐标系。共轭 `F·t·F`（F = 垂直翻转 y → naturalHeight−y）的展开结果：
+///   a' = a, b' = −b, c' = −c, d' = d,
+///   tx' = c·naturalHeight + tx, ty' = naturalHeight − d·naturalHeight − ty
+/// internal 以便单测直接验证矩阵换算。
+func videoDisplayTransformForCIImage(
+    _ t: CGAffineTransform,
+    naturalHeight h: CGFloat
+) -> CGAffineTransform {
+    guard t != .identity else { return .identity }
+    return CGAffineTransform(
+        a: t.a,
+        b: -t.b,
+        c: -t.c,
+        d: t.d,
+        tx: t.c * h + t.tx,
+        ty: h - t.d * h - t.ty
+    )
+}
+
 /// Decoded video frame handed to `VideoLayerComposer`.
 ///
 /// `isCanvasFrame` is true when the frame already represents the current
@@ -63,7 +101,7 @@ public extension VideoFrameProviderProtocol {
 /// Export is sequential and frame-index driven, so it uses `AVAssetReader`
 /// instead of the realtime preview provider. Each timeline video segment owns an
 /// independent reader cursor to avoid cross-layer/time-range interference.
-public final class ExportFrameProvider {
+public final class ExportFrameProvider: @unchecked Sendable {
     private enum SampleCopyResult {
         case sample(CMSampleBuffer, CVPixelBuffer)
         case end
@@ -85,7 +123,7 @@ public final class ExportFrameProvider {
         }
     }
 
-    private final class ReaderState {
+    private final class ReaderState: @unchecked Sendable {
         let key: ReaderKey
         let asset: AVURLAsset
         var reader: AVAssetReader?
@@ -98,6 +136,8 @@ public final class ExportFrameProvider {
         var pendingFrame: (time: CMTime, buffer: CVPixelBuffer)?
         var didReachEnd = false
         var lastLoggedRequestCount = 0
+        /// 源视频 track 的 preferredTransform（竖拍视频需应用，否则导出横屏）。
+        var displayTransform: CGAffineTransform = .identity
 
 #if DEBUG
         var requestCount = 0
@@ -188,7 +228,10 @@ extension ExportFrameProvider: VideoFrameProviderProtocol {
         }
 #endif
 
-        return VideoFrameImage(image: CIImage(cvPixelBuffer: frame.buffer), isCanvasFrame: false)
+        return VideoFrameImage(
+            image: applyPreferredTransform(CIImage(cvPixelBuffer: frame.buffer), state.displayTransform),
+            isCanvasFrame: false
+        )
     }
 
     public func prepare(for item: AVPlayerItem) {
@@ -227,7 +270,25 @@ extension ExportFrameProvider: VideoFrameProviderProtocol {
         if let state = readers[key] { return state }
         let state = ReaderState(key: key)
         readers[key] = state
+        loadDisplayTransform(for: state, asset: state.asset)
         return state
+    }
+
+    /// 异步加载源视频 track 的 preferredTransform（竖拍视频方向）。
+    /// AVAssetReaderTrackOutput 输出自然方向帧，须应用 transform 才能正确渲染。
+    private func loadDisplayTransform(for state: ReaderState, asset: AVURLAsset) {
+        Task { [weak self, weak state] in
+            guard let track = try? await asset.loadTracks(withMediaType: .video).first,
+                  let transform = try? await track.load(.preferredTransform) else { return }
+            self?.setDisplayTransform(transform, for: state)
+        }
+    }
+
+    /// 同步写入 preferredTransform（加锁；从 async 上下文经此同步方法调用）。
+    private func setDisplayTransform(_ transform: CGAffineTransform, for state: ReaderState?) {
+        readersLock.lock()
+        state?.displayTransform = transform
+        readersLock.unlock()
     }
 
     private func clampedLocalTime(for spec: VideoLayerSpec, at compositionTime: CMTime) -> Double {
@@ -788,6 +849,11 @@ public final class PreviewFrameProvider: VideoFrameProviderProtocol {
         /// (which request two sources every tick) keep both alive.
         var lastRequestedAt: TimeInterval = 0
 
+        /// 源视频 track 的 preferredTransform（竖拍视频需应用，否则预览横屏）。
+        /// 由 `sourceOutput(for:)` 异步加载后填入；未加载完时保持 identity
+        /// （瞬时几帧后纠正）。
+        var displayTransform: CGAffineTransform = .identity
+
         var url: URL { segmentKey.url }
 
 #if DEBUG
@@ -1080,12 +1146,20 @@ public final class PreviewFrameProvider: VideoFrameProviderProtocol {
         ) else {
             if !isPlaybackActiveHint,
                let fallbackFrame = lastDisplayedFrame {
-                return VideoFrameImage(image: CIImage(cvPixelBuffer: fallbackFrame.buffer), isCanvasFrame: false)
+                return VideoFrameImage(image: oriented(CIImage(cvPixelBuffer: fallbackFrame.buffer), by: source.displayTransform), isCanvasFrame: false)
             }
             return nil
         }
         lastDisplayedFrame = (compositionTime, buffer)
-        return VideoFrameImage(image: CIImage(cvPixelBuffer: buffer), isCanvasFrame: false)
+        return VideoFrameImage(image: oriented(CIImage(cvPixelBuffer: buffer), by: source.displayTransform), isCanvasFrame: false)
+    }
+
+    /// 应用源 track 的 preferredTransform（竖拍视频方向），并把旋转后的
+    /// extent origin 归一到 (0,0)（fit 计算依赖 origin 为零）。
+    /// Preview / Export 两个 provider 共用（AVPlayerItemVideoOutput 与
+    /// AVAssetReaderTrackOutput 均输出自然方向帧，需统一定向）。
+    private func oriented(_ image: CIImage, by transform: CGAffineTransform) -> CIImage {
+        applyPreferredTransform(image, transform)
     }
 
     public func seek(to time: CMTime) {
@@ -1218,13 +1292,29 @@ public final class PreviewFrameProvider: VideoFrameProviderProtocol {
     private func sourceOutput(for spec: VideoLayerSpec) -> SourceOutput {
         let key = SegmentKey(spec: spec)
         if let source = sources[key] { return source }
-        let source = SourceOutput(key: key, asset: cachedAsset(for: spec.assetURL))
+        let asset = cachedAsset(for: spec.assetURL)
+        let source = SourceOutput(key: key, asset: asset)
         // Mark freshly-used on creation so the LRU sweep below doesn't pick this
         // brand-new source (lastRequestedAt would otherwise be 0 = oldest).
         source.lastRequestedAt = ProcessInfo.processInfo.systemUptime
         sources[key] = source
+        loadDisplayTransform(for: source, asset: asset)
         evictIfNeeded()
         return source
+    }
+
+    /// 异步加载源视频 track 的 preferredTransform 并存入 source。
+    /// AVPlayerItemVideoOutput 输出自然方向帧，须应用 transform 才能正确显示
+    /// （竖拍视频否则渲染为横屏）。结果 hop 回主线程写入（与文件内其余
+    /// AVFoundation 回调一致）。
+    private func loadDisplayTransform(for source: SourceOutput, asset: AVURLAsset) {
+        Task { [weak source] in
+            guard let track = try? await asset.loadTracks(withMediaType: .video).first,
+                  let transform = try? await track.load(.preferredTransform) else { return }
+            await MainActor.run {
+                source?.displayTransform = transform
+            }
+        }
     }
 
     /// Trim the pool back to `maxActiveSources` by evicting the least-recently

@@ -144,8 +144,15 @@ public actor ThumbnailProvider {
     // MARK: - Thumb generation
 
     private func imageThumb(url: URL, size: CGSize) async -> CGImage? {
-        guard let src = CGImageSourceCreateWithURL(url as CFURL, nil),
-              let image = CGImageSourceCreateImageAtIndex(src, 0, nil) else { return nil }
+        guard let src = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
+        // kCGImageSourceCreateThumbnailWithTransform：自动应用 EXIF orientation
+        // （竖拍照片像素是横的，不应用会得到横屏缩略图）。
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: max(size.width, size.height)
+        ]
+        guard let image = CGImageSourceCreateThumbnailAtIndex(src, 0, options as CFDictionary) else { return nil }
         return coverCropped(image, to: size)
     }
 

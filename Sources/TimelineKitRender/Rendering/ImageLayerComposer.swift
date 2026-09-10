@@ -112,7 +112,12 @@ public enum ImageLayerComposer {
         let rawImage: CIImage
         if let cached = imageCache.object(forKey: spec.imageURL as NSURL) {
             rawImage = cached
-        } else if let loaded = CIImage(contentsOf: spec.imageURL) {
+        } else if let loaded = CIImage(
+            contentsOf: spec.imageURL,
+            // 应用 EXIF orientation：竖拍照片像素是横的 + orientation 标记，
+            // 不应用会渲染为横屏（默认 CIImage(contentsOf:) 不应用方向）。
+            options: [.applyOrientationProperty: true]
+        ) {
             imageCache.setObject(loaded, forKey: spec.imageURL as NSURL)
             rawImage = loaded
         } else {

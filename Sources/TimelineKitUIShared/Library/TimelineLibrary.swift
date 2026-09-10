@@ -42,12 +42,29 @@ public struct LibraryProject: Codable, Sendable, Hashable, Identifiable {
     public var name: String
     public var createdAt: Date
     public var timeline: EditorTimeline
+    /// 置顶标记（项目列表排序：置顶优先）。旧 .tlkproj 无此字段 → 解码默认 false。
+    public var isPinned: Bool
 
-    public init(id: UUID = UUID(), name: String, createdAt: Date = Date(), timeline: EditorTimeline) {
+    public init(id: UUID = UUID(), name: String, createdAt: Date = Date(), timeline: EditorTimeline, isPinned: Bool = false) {
         self.id = id
         self.name = name
         self.createdAt = createdAt
         self.timeline = timeline
+        self.isPinned = isPinned
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, name, createdAt, timeline, isPinned
+    }
+
+    /// 旧 .tlkproj 缺少 isPinned（甚至整个 LibraryProject 包装）时的兼容解码。
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id        = try c.decode(UUID.self, forKey: .id)
+        name      = try c.decode(String.self, forKey: .name)
+        createdAt = try c.decode(Date.self, forKey: .createdAt)
+        timeline  = try c.decode(EditorTimeline.self, forKey: .timeline)
+        isPinned  = try c.decodeIfPresent(Bool.self, forKey: .isPinned) ?? false
     }
 }
 
@@ -322,6 +339,58 @@ public struct TimelineLibrary: Sendable {
     /// 枚举库内项目 ID。
     public func listProjectIDs() -> [UUID] {
         listProjects().map(\.id)
+    }
+
+    // MARK: - Project management (rename / duplicate / delete / pin)
+
+    /// 项目文件 URL。
+    private func projectURL(id: UUID) -> URL {
+        projectsDirectory
+            .appendingPathComponent(id.uuidString)
+            .appendingPathExtension("tlkproj")
+    }
+
+    /// 重命名项目。
+    public func renameProject(id: UUID, newName: String) throws {
+        var project = try loadProject(projectID: id)
+        project.name = newName
+        try saveProject(project)
+    }
+
+    /// 复制项目（新 id，名称"xxx 副本"，createdAt=now）。timeline 深拷贝。
+    @discardableResult
+    public func duplicateProject(id: UUID) throws -> LibraryProject {
+        let source = try loadProject(projectID: id)
+        var copy = source
+        copy = LibraryProject(
+            id: UUID(),
+            name: source.name + " 副本",
+            createdAt: Date(),
+            timeline: source.timeline,
+            isPinned: false
+        )
+        try saveProject(copy)
+        return copy
+    }
+
+    /// 删除项目（直接删除 .tlkproj 文件，不可恢复；调用方负责确认）。
+    public func deleteProject(id: UUID) throws {
+        try FileManager.default.removeItem(at: projectURL(id: id))
+    }
+
+    /// 设置/取消置顶。
+    public func setPinned(id: UUID, isPinned: Bool) throws {
+        var project = try loadProject(projectID: id)
+        project.isPinned = isPinned
+        try saveProject(project)
+    }
+
+    /// 项目列表排序：置顶优先，再按 createdAt 倒序。
+    public static func sortedProjects(_ projects: [LibraryProject]) -> [LibraryProject] {
+        projects.sorted {
+            if $0.isPinned != $1.isPinned { return $0.isPinned }
+            return $0.createdAt > $1.createdAt
+        }
     }
 
     // MARK: - Metadata

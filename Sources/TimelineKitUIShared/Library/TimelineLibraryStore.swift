@@ -37,6 +37,7 @@ public final class TimelineLibraryStore {
         activateScope(for: packageURL)
         self.library = lib
         refreshMedia()
+        refreshProjects()
     }
 
     /// 打开现有库。
@@ -45,6 +46,7 @@ public final class TimelineLibraryStore {
         activateScope(for: packageURL)
         self.library = lib
         refreshMedia()
+        refreshProjects()
     }
 
     private func activateScope(for packageURL: URL) {
@@ -104,21 +106,35 @@ public final class TimelineLibraryStore {
 
     // MARK: - Project
 
-    /// 当前库内所有项目（从库读取）。
-    public var projects: [LibraryProject] { library?.listProjects() ?? [] }
+    /// 项目列表缓存（可观察；操作后 refreshProjects 刷新）。
+    /// 类本身 @Observable，属性自动被追踪。`projects` computed 返回 cache，
+    /// 保持既有调用点不变。
+    public private(set) var projectsCache: [LibraryProject] = []
+
+    /// 当前库内所有项目（缓存）。
+    public var projects: [LibraryProject] { projectsCache }
+
+    /// 重新读取库内项目列表（置顶优先，createdAt 倒序）。
+    public func refreshProjects() {
+        projectsCache = TimelineLibrary.sortedProjects(library?.listProjects() ?? [])
+    }
 
     /// 把项目保存为库内项目。
     @discardableResult
     public func saveProject(_ project: LibraryProject) throws -> UUID {
         guard let library else { throw TimelineLibraryError.notABundle(URL(fileURLWithPath: "")) }
-        return try library.saveProject(project)
+        let id = try library.saveProject(project)
+        refreshProjects()
+        return id
     }
 
     /// 把 timeline 保存为库内项目（无名称包装；保留旧签名兼容）。
     @discardableResult
     public func saveProject(_ timeline: EditorTimeline) throws -> UUID {
         guard let library else { throw TimelineLibraryError.notABundle(URL(fileURLWithPath: "")) }
-        return try library.saveProject(timeline)
+        let id = try library.saveProject(timeline)
+        refreshProjects()
+        return id
     }
 
     /// 加载库内项目。
@@ -141,13 +157,40 @@ public final class TimelineLibraryStore {
         return project
     }
 
+    // MARK: - Project management (rename / duplicate / delete / pin)
+
+    /// 重命名项目。
+    public func renameProject(id: UUID, newName: String) throws {
+        guard let library else { throw TimelineLibraryError.notABundle(URL(fileURLWithPath: "")) }
+        try library.renameProject(id: id, newName: newName)
+        refreshProjects()
+    }
+
+    /// 复制项目。
+    @discardableResult
+    public func duplicateProject(id: UUID) throws -> LibraryProject {
+        guard let library else { throw TimelineLibraryError.notABundle(URL(fileURLWithPath: "")) }
+        let copy = try library.duplicateProject(id: id)
+        refreshProjects()
+        return copy
+    }
+
+    /// 删除项目（直接删除，不可恢复；调用方负责确认）。
+    public func deleteProject(id: UUID) throws {
+        guard let library else { throw TimelineLibraryError.notABundle(URL(fileURLWithPath: "")) }
+        try library.deleteProject(id: id)
+        refreshProjects()
+    }
+
+    /// 设置/取消置顶。
+    public func setPinned(id: UUID, isPinned: Bool) throws {
+        guard let library else { throw TimelineLibraryError.notABundle(URL(fileURLWithPath: "")) }
+        try library.setPinned(id: id, isPinned: isPinned)
+        refreshProjects()
+    }
+
     /// 当前库内所有项目 ID。
     public func projectIDs() -> [UUID] {
         projects.map(\.id)
-    }
-
-    /// 重新读取库内项目列表。
-    public func refreshProjects() {
-        // projects 是计算属性，刷新由观察循环读该属性触发；此处保留以对齐语义。
     }
 }

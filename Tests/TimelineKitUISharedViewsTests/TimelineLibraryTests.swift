@@ -140,6 +140,86 @@ final class TimelineLibraryTests: XCTestCase {
         XCTAssertEqual(loaded.timeline.canvas.width, 1280)
         XCTAssertEqual(loaded.timeline.canvas.height, 720)
     }
+
+    // MARK: - Project management (rename / duplicate / delete / pin)
+
+    func testRenameProject() throws {
+        let lib = try TimelineLibrary.create(at: bundleURL)
+        let project = try lib.createProjectForTest(name: "原名")
+
+        try lib.renameProject(id: project.id, newName: "新名")
+        let loaded = try lib.loadProject(projectID: project.id)
+        XCTAssertEqual(loaded.name, "新名")
+        XCTAssertEqual(loaded.timeline.canvas.width, project.timeline.canvas.width)
+    }
+
+    func testDuplicateProject() throws {
+        let lib = try TimelineLibrary.create(at: bundleURL)
+        let project = try lib.createProjectForTest(name: "原始")
+
+        let copy = try lib.duplicateProject(id: project.id)
+        XCTAssertNotEqual(copy.id, project.id)
+        XCTAssertEqual(copy.name, "原始 副本")
+        XCTAssertEqual(copy.timeline.duration, project.timeline.duration)
+        XCTAssertEqual(lib.listProjects().count, 2)
+    }
+
+    func testDeleteProject() throws {
+        let lib = try TimelineLibrary.create(at: bundleURL)
+        let project = try lib.createProjectForTest(name: "待删")
+
+        try lib.deleteProject(id: project.id)
+        XCTAssertEqual(lib.listProjects().count, 0)
+        XCTAssertThrowsError(try lib.loadProject(projectID: project.id))
+    }
+
+    func testSetPinnedAndSortedOrder() throws {
+        let lib = try TimelineLibrary.create(at: bundleURL)
+        let a = try lib.createProjectForTest(name: "A")
+        let b = try lib.createProjectForTest(name: "B")  // newest
+
+        // Default order: newest first.
+        XCTAssertEqual(TimelineLibrary.sortedProjects(lib.listProjects()).map(\.name), ["B", "A"])
+
+        // Pin the older project → it moves to the front.
+        try lib.setPinned(id: a.id, isPinned: true)
+        let pinned = try lib.loadProject(projectID: a.id)
+        XCTAssertTrue(pinned.isPinned)
+        XCTAssertEqual(TimelineLibrary.sortedProjects(lib.listProjects()).map(\.name), ["A", "B"])
+        _ = b
+    }
+
+    func testLegacyProjectWithoutIsPinnedDecodesFalse() throws {
+        let lib = try TimelineLibrary.create(at: bundleURL)
+        let project = try lib.createProjectForTest(name: "兼容")
+
+        // Rewrite the .tlkproj without the isPinned key (simulating a phase-1 file).
+        let url = lib.projectsDirectory
+            .appendingPathComponent(project.id.uuidString)
+            .appendingPathExtension("tlkproj")
+        let legacyJSON = """
+        {"id":"\(project.id.uuidString)","name":"兼容","createdAt":0,"timeline":{"id":"\(project.timeline.id.uuidString)","canvas":{"width":1920,"height":1080,"fps":30},"tracks":[],"materials":[],"transitions":[],"metadata":{"createdAt":0}}}
+        """
+        try legacyJSON.data(using: .utf8)!.write(to: url, options: .atomic)
+
+        let loaded = try lib.loadProject(projectID: project.id)
+        XCTAssertFalse(loaded.isPinned, "legacy file without isPinned should decode to false")
+    }
+}
+
+/// 测试辅助：直接走 store 的 createProject（含主轨骨架）。
+extension TimelineLibrary {
+    @MainActor
+    func createProjectForTest(name: String) throws -> LibraryProject {
+        let canvas = EditorCanvas(width: 1920, height: 1080, fps: 30)
+        var timeline = EditorTimeline(canvas: canvas)
+        if !timeline.tracks.contains(where: { $0.isMainTrack }) {
+            timeline.tracks.append(EditorTrack(id: UUID(), kind: .video, label: "视频", zPosition: 0, segments: [], isMainTrack: true))
+        }
+        let project = LibraryProject(name: name, timeline: timeline)
+        try saveProject(project)
+        return project
+    }
 }
 
 /// Tests for the @Observable store wrapper (create/open/addMedia).

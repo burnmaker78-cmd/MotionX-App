@@ -17,6 +17,8 @@ import TimelineKitUISharedViews
 public struct ClipEditorView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var store: EditorStore
+    @State private var libraryStore = TimelineLibraryStore()
+    @State private var activeProjectID: UUID?
     @State private var activeToolCategory: EditorToolCategory? = nil
     @State private var coordinator = CompositionCoordinator()
     @State private var draftStore  = DraftStore()
@@ -25,14 +27,20 @@ public struct ClipEditorView: View {
 
     private var transitionEditContext: TransitionEditContext? { store.selection.editingTransitionContext }
 
+    /// 编辑页（由项目页驱动）：接收已打开的资源库与目标项目。
+    /// 项目页负责库/项目管理（新建/重命名/删除等）；本页专注编辑当前项目，
+    /// 退出时把 timeline 回库（persistActiveProject）。
     public init(
-        store: EditorStore,
+        libraryStore: TimelineLibraryStore,
+        project: LibraryProject,
         onDraftSave: ((UUID, EditorTimeline) -> Void)? = nil,
         onExport: ((Data, URL, UIImage) -> Void)? = nil
     ) {
-        _store = State(initialValue: store)
         self.onDraftSave = onDraftSave
         self.onExport = onExport
+        _store = State(initialValue: EditorStore(timeline: project.timeline))
+        _libraryStore = State(initialValue: libraryStore)
+        _activeProjectID = State(initialValue: project.id)
     }
 
     private let controlBarHeight: CGFloat  = 52
@@ -330,6 +338,19 @@ public struct ClipEditorView: View {
     private func saveDraftAndNotify() {
         let draftID = DraftStore.save(store.timeline)
         onDraftSave?(draftID, store.timeline)
+        // 项目回库：把当前 timeline 持久化到 .tlkbundle Projects/（对齐 macOS）。
+        persistActiveProject()
+    }
+
+    /// 把当前 timeline 写回活动项目（LibraryProject 落库）。静默失败——
+    /// DraftStore 快速恢复通道仍然有效。
+    private func persistActiveProject() {
+        guard let id = activeProjectID else { return }
+        var project = LibraryProject(id: id, name: "未命名项目", timeline: store.timeline)
+        if let existing = libraryStore.projects.first(where: { $0.id == id }) {
+            project.name = existing.name
+        }
+        _ = try? libraryStore.saveProject(project)
     }
 
     // MARK: - Panel Overlay
@@ -415,10 +436,13 @@ public struct ClipEditorView: View {
         }
         // Try video first.
         if let movie = try? await item.loadTransferable(type: VideoTransferable.self) {
-            let native = await avDuration(of: movie.url) ?? 0
+            // 落库：系统临时副本复制进 .tlkbundle Media/（持久），再用库内 URL 加时间线。
+            let libraryURLs = await libraryStore.addMedia(urls: [movie.url])
+            guard let libraryURL = libraryURLs.first else { return }
+            let native = await avDuration(of: libraryURL) ?? 0
             await MainActor.run {
                 store.addVisualSegment(
-                    localURL: movie.url,
+                    localURL: libraryURL,
                     nativeDuration: native,
                     targetTrackID: targetTrackID
                 )
@@ -428,13 +452,21 @@ public struct ClipEditorView: View {
         // Fallback: image.
         if let data = try? await item.loadTransferable(type: Data.self) {
             let ext = item.supportedContentTypes.first?.preferredFilenameExtension ?? "jpg"
-            let dest = FileManager.default.temporaryDirectory
+            // 图片 Data 先写临时文件，交给库复制（库内持久副本），临时文件即弃。
+            let staging = FileManager.default.temporaryDirectory
                 .appendingPathComponent(UUID().uuidString)
                 .appendingPathExtension(ext)
-            try? data.write(to: dest)
+            do {
+                try data.write(to: staging)
+            } catch {
+                return
+            }
+            let libraryURLs = await libraryStore.addMedia(urls: [staging])
+            try? FileManager.default.removeItem(at: staging)
+            guard let libraryURL = libraryURLs.first else { return }
             await MainActor.run {
                 store.addVisualSegment(
-                    localURL: dest,
+                    localURL: libraryURL,
                     nativeDuration: nil,
                     targetTrackID: targetTrackID
                 )

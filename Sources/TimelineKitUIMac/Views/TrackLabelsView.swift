@@ -33,7 +33,7 @@ final class TrackLabelsView: BaseFlippedView {
 
     let scrollView = NSScrollView()
     private let contentContainer = BaseFlippedView()
-    private let toggleButton = NSButton()
+    private let sidebarToggleButton = NSButton()
     private var trackRows: [TrackLabelRowView] = []
 
     // MARK: - State
@@ -76,19 +76,19 @@ final class TrackLabelsView: BaseFlippedView {
 
         // Toggle button — fixed at top edge, outside scroll area.
         // Pinned to trailing edge so it stays visible in both collapsed & expanded widths.
-        toggleButton.isBordered = false
-        toggleButton.target = self
-        toggleButton.action = #selector(didTapToggle)
-        toggleButton.wantsLayer = true
-        toggleButton.translatesAutoresizingMaskIntoConstraints = false
+        sidebarToggleButton.isBordered = false
+        sidebarToggleButton.target = self
+        sidebarToggleButton.action = #selector(didTapToggle)
+        sidebarToggleButton.wantsLayer = true
+        sidebarToggleButton.translatesAutoresizingMaskIntoConstraints = false
         updateToggleIcon()
-        addSubview(toggleButton)
+        addSubview(sidebarToggleButton)
         
         NSLayoutConstraint.activate([
-            toggleButton.topAnchor.constraint(equalTo: topAnchor, constant: 7),
-            toggleButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -4),
-            toggleButton.widthAnchor.constraint(equalToConstant: 22),
-            toggleButton.heightAnchor.constraint(equalToConstant: 22)
+            sidebarToggleButton.topAnchor.constraint(equalTo: topAnchor, constant: 7),
+            sidebarToggleButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -4),
+            sidebarToggleButton.widthAnchor.constraint(equalToConstant: 22),
+            sidebarToggleButton.heightAnchor.constraint(equalToConstant: 22)
         ])
 
         // Right separator
@@ -206,9 +206,9 @@ final class TrackLabelsView: BaseFlippedView {
     private func updateToggleIcon() {
         let cfg = NSImage.SymbolConfiguration(pointSize: 11, weight: .semibold)
         let name = isExpanded ? "chevron.left.2" : "chevron.right.2"
-        toggleButton.image = NSImage(systemSymbolName: name, accessibilityDescription: nil)?
+        sidebarToggleButton.image = NSImage(systemSymbolName: name, accessibilityDescription: nil)?
             .withSymbolConfiguration(cfg)
-        toggleButton.contentTintColor = NSColor.white.withAlphaComponent(0.45)
+        sidebarToggleButton.contentTintColor = NSColor.white.withAlphaComponent(0.45)
     }
 
     private func didTapControl() {

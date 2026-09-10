@@ -86,10 +86,16 @@ final class TrackCanvasView: BaseFlippedView {
     private var timeline: EditorTimeline?
     private(set) var layout: TrackLayout = .empty
     private(set) var currentPixelsPerSecond: CGFloat = minPixelsPerSecond
+    /// Last known visible width of the scroll view's clip view. The canvas must
+    /// be at least this wide so an empty timeline still fills the editor instead
+    /// of showing only a sliver (~76pt from TrackLayout's 1s minimum).
+    private var availableWidth: CGFloat = 0
 
     private var rulerView: RulerView!
     var trackRows: [UUID: TrackRowView] = [:]
     private var playheadLayer: CALayer!
+    /// Empty-state guide ("将媒体拖到此以开始") shown when the main track has no clips.
+    private var emptyGuideLabel: NSTextField?
 
     /// Transition badges: keyed by "leadingID–trailingID" string for fast lookup.
     private var transitionBadges: [String: TransitionBadgeView] = [:]
@@ -148,7 +154,8 @@ final class TrackCanvasView: BaseFlippedView {
     // MARK: - Public API
 
     func configure(timeline: EditorTimeline, availableWidth: CGFloat) {
-        self.timeline = timeline
+        self.timeline       = timeline
+        self.availableWidth = availableWidth
         // V5.1 BUG 2: 空 timeline 走默认 pps，避免 fittedPPS 把 duration=0 膨胀为 0.1s
         // 导致 availableWidth/0.1 算出数千 pps，新增素材瞬间生成海量缩略图。
         if currentPixelsPerSecond == Self.minPixelsPerSecond {
@@ -170,7 +177,9 @@ final class TrackCanvasView: BaseFlippedView {
         currentPixelsPerSecond = pixelsPerSecond.clamped(to: Self.minPixelsPerSecond...Self.maxPixelsPerSecond)
         layout = TrackLayout(duration: timeline.duration, pixelsPerSecond: currentPixelsPerSecond)
         applyLayout(timeline: timeline)
-        for (_, row) in trackRows { row.relayout(layout: layout) }
+        for (_, row) in trackRows {
+            row.relayout(layout: layout)
+        }
         updatePlayhead(time: playheadTime)
     }
 
@@ -347,17 +356,47 @@ final class TrackCanvasView: BaseFlippedView {
 
     // MARK: - Private
 
-    private func applyLayout(timeline: EditorTimeline) {
+        private func applyLayout(timeline: EditorTimeline) {
         let totalHeight = Self.rulerHeight + CGFloat(timeline.tracks.count) * (Self.trackHeight + Self.trackSpacing)
         let totalWidth  = layout.totalWidth + Self.rightPadding
-        let contentSize = CGSize(width: totalWidth, height: max(totalHeight, 200))
-        
+        // 空 timeline 时 canvas 至少填满可见宽度，避免只显示一小段标尺。
+        let minWidth    = max(availableWidth, 0)
+        let contentSize = CGSize(width: max(totalWidth, minWidth), height: max(totalHeight, 200))
+
         setFrameSize(contentSize)
-        
-        rulerView.frame = CGRect(x: 0, y: 0, width: totalWidth, height: Self.rulerHeight)
+
+        rulerView.frame = CGRect(x: 0, y: 0, width: contentSize.width, height: Self.rulerHeight)
         rulerView.configure(layout: layout)
-        
+
         playheadLayer.frame.size = CGSize(width: 2, height: contentSize.height)
+        updateEmptyGuide()
+    }
+
+    /// 空态引导：主轨无片段时在 canvas 居中显示"将媒体拖到此以开始"。
+    private func updateEmptyGuide() {
+        let isEmpty = timeline?.mainTrack?.segments.isEmpty ?? true
+        if isEmpty {
+            if emptyGuideLabel == nil {
+                let label = NSTextField(labelWithString: "将媒体拖到此以开始")
+                label.font = .systemFont(ofSize: 13, weight: .medium)
+                label.textColor = NSColor.white.withAlphaComponent(0.45)
+                label.alignment = .center
+                label.isBezeled = false
+                label.drawsBackground = false
+                label.isEditable = false
+                label.isSelectable = false
+                label.translatesAutoresizingMaskIntoConstraints = false
+                addSubview(label)
+                NSLayoutConstraint.activate([
+                    label.centerXAnchor.constraint(equalTo: centerXAnchor),
+                    label.centerYAnchor.constraint(equalTo: centerYAnchor, constant: Self.rulerHeight / 2)
+                ])
+                emptyGuideLabel = label
+            }
+            emptyGuideLabel?.isHidden = false
+        } else {
+            emptyGuideLabel?.isHidden = true
+        }
     }
 
     private func rebuildTrackRows(timeline: EditorTimeline, availableWidth: CGFloat) {

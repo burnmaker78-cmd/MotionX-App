@@ -71,15 +71,15 @@ public struct ClipEditorView: View {
         // merely overlays a view and would duplicate the system title.
         .navigationTitle("TimelineKit")
         .toolbar {
-            // Import — opens the fileImporter (host may also trigger via callback).
-            ToolbarItem(placement: .primaryAction) {
-                Button {
-                    showAddMediaPicker = true
-                } label: {
-                    Label("导入素材", systemImage: "square.and.arrow.down")
-                }
-                .disabled(isImporting)
-            }
+//            // Import — opens the fileImporter (host may also trigger via callback).
+//            ToolbarItem(placement: .primaryAction) {
+//                Button {
+//                    showAddMediaPicker = true
+//                } label: {
+//                    Label("导入素材", systemImage: "square.and.arrow.down")
+//                }
+//                .disabled(isImporting)
+//            }
             // Export — placeholder until the export pipeline lands.
             ToolbarItem(placement: .primaryAction) {
                 Button {

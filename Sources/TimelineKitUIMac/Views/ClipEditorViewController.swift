@@ -66,8 +66,12 @@ public final class ClipEditorViewController: NSViewController {
     /// would make `apply` see "old == new" and skip the rebuild, leaving
     /// `trackRows` keyed by stale ids (no segments visible).
     public func updateStore(_ newStore: EditorStore) {
-        self.store     = newStore
-        self.selection = newStore.selection
+        // `store` is read directly by gesture/drop handlers (e.g. addVisualSegment),
+        // and `apply` does not set it — so update it here.
+        self.store = newStore
+        // `timeline` and `selection` are set inside `apply` (after the structural
+        // comparison against the OLD stored timeline). Pre-assigning either here
+        // would break that comparison.
         apply(timeline: newStore.timeline, selection: newStore.selection)
     }
 

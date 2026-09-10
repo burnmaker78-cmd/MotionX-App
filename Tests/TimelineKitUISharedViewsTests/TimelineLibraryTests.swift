@@ -205,9 +205,95 @@ final class TimelineLibraryTests: XCTestCase {
         let loaded = try lib.loadProject(projectID: project.id)
         XCTAssertFalse(loaded.isPinned, "legacy file without isPinned should decode to false")
     }
+    // MARK: - Portable asset URLs (library-package relative)
+
+    /// 保存后 .tlkproj 不得包含沙盒绝对路径；加载后 URL 指向当前包。
+    func testSaveProjectRelativizesAssetURLs() async throws {
+        let lib = try TimelineLibrary.create(at: bundleURL)
+
+        // 导入一张图片（库内 Media/ 副本）。
+        let src = tempDir.appendingPathComponent("photo.jpeg")
+        try Data("img".utf8).write(to: src)
+        let entry = try await lib.importMediaEntry(from: src)
+        let libraryURL = lib.mediaFileURL(for: entry)
+
+        // timeline 引用库内 URL。
+        let canvas = EditorCanvas(width: 1920, height: 1080, fps: 30)
+        var timeline = EditorTimeline(canvas: canvas)
+        let asset = EditorAsset(id: entry.id, type: .image, localURL: libraryURL)
+        timeline.materials[asset.id] = asset
+        let project = LibraryProject(name: "相对路径", timeline: timeline)
+        try lib.saveProject(project)
+
+        // 磁盘上的 .tlkproj 不得包含沙盒绝对路径（bundleURL 前缀）。
+        // JSONEncoder 会把 / 转义为 \/，先反转义再断言。
+        let raw = try String(contentsOf: lib.projectsDirectory
+            .appendingPathComponent(project.id.uuidString)
+            .appendingPathExtension("tlkproj"), encoding: .utf8)
+            .replacingOccurrences(of: "\\/", with: "/")
+        XCTAssertFalse(raw.contains(bundleURL.path), "saved .tlkproj must not contain absolute sandbox paths")
+        XCTAssertTrue(raw.contains("tlkbundle://"), "saved .tlkproj should use tlkbundle:// scheme; raw=\(raw.prefix(600))")
+
+        // 加载后 URL 还原为当前包绝对路径。
+        let loaded = try lib.loadProject(projectID: project.id)
+        let loadedAsset = loaded.timeline.materials.all.first { $0.id == entry.id }
+        XCTAssertEqual(loadedAsset?.localURL, libraryURL)
+    }
+
+    /// 旧格式（阶段 1 存了沙盒绝对路径）加载时自愈：重定向到当前包内文件。
+    func testLoadProjectSelfHealsLegacyAbsolutePaths() throws {
+        let lib = try TimelineLibrary.create(at: bundleURL)
+
+        // 模拟阶段 1 的 .tlkproj：localURL 存了"旧沙盒"绝对路径（文件不存在），
+        // 但包内 Media/ 有同名文件。
+        let mediaFile = lib.mediaDirectory.appendingPathComponent("BA9FAB45.jpeg")
+        try Data("img".utf8).write(to: mediaFile)
+        let staleURL = URL(fileURLWithPath: "/var/mobile/Containers/Data/Application/OLD-UUID/Documents/默认资源库.tlkbundle/Media/BA9FAB45.jpeg")
+
+        let canvas = EditorCanvas(width: 1920, height: 1080, fps: 30)
+        var timeline = EditorTimeline(canvas: canvas)
+        let asset = EditorAsset(id: UUID(), type: .image, localURL: staleURL)
+        timeline.materials[asset.id] = asset
+        let project = LibraryProject(name: "旧格式", timeline: timeline)
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .sortedKeys
+        try encoder.encode(project).write(to: lib.projectsDirectory
+            .appendingPathComponent(project.id.uuidString)
+            .appendingPathExtension("tlkproj"), options: .atomic)
+
+        // 加载：自愈重定向到当前包内文件。
+        let loaded = try lib.loadProject(projectID: project.id)
+        let loadedAsset = loaded.timeline.materials.all.first { $0.id == asset.id }
+        XCTAssertEqual(loadedAsset?.localURL, mediaFile)
+    }
+
+    /// 库包整体迁移（改名）后，相对路径项目仍能加载。
+    func testRelocatedBundleStillLoadsProjects() async throws {
+        let lib = try TimelineLibrary.create(at: bundleURL)
+        let src = tempDir.appendingPathComponent("clip.mp4")
+        try Data("v".utf8).write(to: src)
+        let entry = try await lib.importMediaEntry(from: src)
+        let libraryURL = lib.mediaFileURL(for: entry)
+
+        let canvas = EditorCanvas(width: 1920, height: 1080, fps: 30)
+        var timeline = EditorTimeline(canvas: canvas)
+        let asset = EditorAsset(id: entry.id, type: .video, localURL: libraryURL, nativeDuration: 2)
+        timeline.materials[asset.id] = asset
+        let project = LibraryProject(name: "迁移", timeline: timeline)
+        try lib.saveProject(project)
+
+        // 迁移：包目录改名。
+        let movedURL = tempDir.appendingPathComponent("moved.tlkbundle")
+        try FileManager.default.moveItem(at: bundleURL, to: movedURL)
+        let reopened = try TimelineLibrary.open(at: movedURL)
+
+        let loaded = try reopened.loadProject(projectID: project.id)
+        let loadedAsset = loaded.timeline.materials.all.first { $0.id == entry.id }
+        XCTAssertEqual(loadedAsset?.localURL, movedURL.appendingPathComponent("Media").appendingPathComponent(entry.fileName))
+    }
 }
 
-/// 测试辅助：直接走 store 的 createProject（含主轨骨架）。
+/// 测试辅助：创建含主轨骨架的项目并落库。
 extension TimelineLibrary {
     @MainActor
     func createProjectForTest(name: String) throws -> LibraryProject {

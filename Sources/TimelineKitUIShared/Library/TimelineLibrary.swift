@@ -289,11 +289,17 @@ public struct TimelineLibrary: Sendable {
 
     /// 把 timeline 保存为库内项目（`Projects/<projectID>.tlkproj`）。
     /// 项目封装为 `LibraryProject`（含名称 + timeline）。
+    ///
+    /// 持久化前把库内资产的 `localURL` 相对化为 `tlkbundle://` scheme——
+    /// 沙盒 App 重启后容器 UUID 会变，绝对路径失效；相对路径让库包整体
+    /// 迁移（改名/移动/跨设备拷贝）也能工作。
     @discardableResult
     public func saveProject(_ project: LibraryProject) throws -> UUID {
+        var persisted = project
+        persisted.timeline = Self.relativizeAssetURLsForPersistence(in: project.timeline, packageURL: packageURL)
         let encoder = JSONEncoder()
         encoder.outputFormatting = .sortedKeys
-        let data = try encoder.encode(project)
+        let data = try encoder.encode(persisted)
         let url = projectsDirectory
             .appendingPathComponent(project.id.uuidString)
             .appendingPathExtension("tlkproj")
@@ -308,20 +314,102 @@ public struct TimelineLibrary: Sendable {
     }
 
     /// 加载库内某项目（兼容旧 `.tlkproj`：纯 EditorTimeline 时回退名称）。
+    ///
+    /// 加载后把 `tlkbundle://` 相对 URL 还原为当前包的绝对路径；并对旧格式
+    /// （存了沙盒绝对路径）自愈——文件不存在但包内 Media/ 有同名文件时重定向。
     public func loadProject(projectID: UUID) throws -> LibraryProject {
         let url = projectsDirectory
             .appendingPathComponent(projectID.uuidString)
             .appendingPathExtension("tlkproj")
         let data = try Data(contentsOf: url)
         // 先尝试新的 LibraryProject 格式，失败则回退纯 EditorTimeline。
-        if let project = try? JSONDecoder().decode(LibraryProject.self, from: data) {
-            return project
-        }
-        if let timeline = try? JSONDecoder().decode(EditorTimeline.self, from: data) {
+        var project: LibraryProject
+        if let decoded = try? JSONDecoder().decode(LibraryProject.self, from: data) {
+            project = decoded
+        } else if let timeline = try? JSONDecoder().decode(EditorTimeline.self, from: data) {
             let name = projectID.uuidString  // 旧文件无名称，用项目 ID 作名称
-            return LibraryProject(id: projectID, name: name, timeline: timeline)
+            project = LibraryProject(id: projectID, name: name, timeline: timeline)
+        } else {
+            throw TimelineLibraryError.corruptProject(projectID)
         }
-        throw TimelineLibraryError.corruptProject(projectID)
+        project.timeline = Self.resolveAssetURLsForLoading(in: project.timeline, packageURL: packageURL)
+        return project
+    }
+
+    // MARK: - Portable asset URLs (library-package relative)
+
+    static let portableBundleScheme = "tlkbundle"
+
+    /// 把库内资产 URL 相对化为 `tlkbundle://<relative-path>`（相对包根）。
+    /// 包外 URL（防御）原样保留。
+    static func relativizeAssetURLsForPersistence(in timeline: EditorTimeline, packageURL: URL) -> EditorTimeline {
+        transformAssetURLs(in: timeline) { url in
+            guard url.isFileURL,
+                  let relativePath = bundleRelativePath(for: url, packageURL: packageURL) else {
+                return url
+            }
+            return portableBundleURL(relativePath: relativePath) ?? url
+        }
+    }
+
+    /// 把 `tlkbundle://` 相对 URL 还原为当前包的绝对路径。
+    /// 自愈：旧格式存了沙盒绝对路径且文件已不存在，但包内 Media/ 有同名文件
+    /// 时，重定向到当前包（修复阶段 1 的 .tlkproj）。
+    static func resolveAssetURLsForLoading(in timeline: EditorTimeline, packageURL: URL) -> EditorTimeline {
+        transformAssetURLs(in: timeline) { url in
+            if url.scheme == portableBundleScheme,
+               let relativePath = bundleRelativePath(fromPortable: url) {
+                return packageURL.appendingPathComponent(relativePath)
+            }
+            guard url.isFileURL,
+                  !FileManager.default.fileExists(atPath: url.path),
+                  let relativePath = bundleRelativePath(fromLegacyAbsolute: url) else {
+                return url
+            }
+            let candidate = packageURL.appendingPathComponent(relativePath)
+            return FileManager.default.fileExists(atPath: candidate.path) ? candidate : url
+        }
+    }
+
+    private static func transformAssetURLs(
+        in timeline: EditorTimeline,
+        transform: (URL) -> URL
+    ) -> EditorTimeline {
+        var timeline = timeline
+        for asset in timeline.materials.all {
+            var updated = asset
+            if let localURL = asset.localURL {
+                updated.localURL = transform(localURL)
+            }
+            timeline.materials[asset.id] = updated
+        }
+        return timeline
+    }
+
+    /// 绝对路径 → 包内相对路径（如 `Media/<uuid>.jpeg`）；不在包内返回 nil。
+    private static func bundleRelativePath(for url: URL, packageURL: URL) -> String? {
+        let basePath = packageURL.standardizedFileURL.path
+        let path = url.standardizedFileURL.path
+        guard path.hasPrefix(basePath + "/") else { return nil }
+        return String(path.dropFirst(basePath.count + 1))
+    }
+
+    private static func portableBundleURL(relativePath: String) -> URL? {
+        // 三斜杠（空 authority）：`//` 后的段会被解析为 host 而非 path，
+        // 导致还原时丢失首段目录（Media/）。path 必须以 / 开头。
+        URL(string: portableBundleScheme + ":///" + relativePath)
+    }
+
+    private static func bundleRelativePath(fromPortable url: URL) -> String? {
+        guard url.scheme == portableBundleScheme else { return nil }
+        return String(url.path.drop { $0 == "/" })
+    }
+
+    /// 旧格式自愈：从沙盒绝对路径中提取 `/Media/` 之后的部分。
+    private static func bundleRelativePath(fromLegacyAbsolute url: URL) -> String? {
+        let path = url.standardizedFileURL.path
+        guard let range = path.range(of: "/Media/") else { return nil }
+        return String(path[range.lowerBound...].dropFirst())
     }
 
     /// 枚举库内所有项目。

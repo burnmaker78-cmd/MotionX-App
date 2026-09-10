@@ -6,9 +6,24 @@
 //
 
 import SwiftUI
+#if DEBUG && os(iOS)
+import DebugSwift
+#endif
 
 @main
 struct VideoEditorDemoApp: App {
+#if DEBUG && os(iOS)
+    private let debugSwift = DebugSwift()
+#endif
+    
+    init() {
+#if DEBUG && os(iOS)
+        debugSwift.setup()
+        // debugSwift.setup(disable: [.leaksDetector])
+        debugSwift.show()
+#endif
+    }
+    
     var body: some Scene {
         WindowGroup {
             VideoEditorView()

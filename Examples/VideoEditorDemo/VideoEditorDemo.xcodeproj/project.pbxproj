@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		D02FEB142FF61A900099797A /* TimelineKitUIiOS in Frameworks */ = {isa = PBXBuildFile; productRef = D02FEB132FF61A900099797A /* TimelineKitUIiOS */; };
 		D02FEB162FF61A900099797A /* TimelineKitUIMac in Frameworks */ = {isa = PBXBuildFile; productRef = D02FEB172FF61A900099797A /* TimelineKitUIMac */; };
+		D098DA80305245D9001398C8 /* DebugSwift in Frameworks */ = {isa = PBXBuildFile; productRef = D098DA7F305245D9001398C8 /* DebugSwift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -30,6 +31,7 @@
 			files = (
 				D02FEB142FF61A900099797A /* TimelineKitUIiOS in Frameworks */,
 				D02FEB162FF61A900099797A /* TimelineKitUIMac in Frameworks */,
+				D098DA80305245D9001398C8 /* DebugSwift in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -82,6 +84,7 @@
 			packageProductDependencies = (
 				D02FEB132FF61A900099797A /* TimelineKitUIiOS */,
 				D02FEB172FF61A900099797A /* TimelineKitUIMac */,
+				D098DA7F305245D9001398C8 /* DebugSwift */,
 			);
 			productName = VideoEditorDemo;
 			productReference = D02FE98A2FF4ECF20099797A /* VideoEditorDemo.app */;
@@ -113,6 +116,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				D02FEB152FF631B40099797A /* XCLocalSwiftPackageReference "../../../TimelineKit" */,
+				D098DA7E305245D9001398C8 /* XCRemoteSwiftPackageReference "DebugSwift" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = D02FE98B2FF4ECF20099797A /* Products */;
@@ -274,6 +278,7 @@
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readwrite;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "App 需要使用相册";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
@@ -318,6 +323,7 @@
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readwrite;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "App 需要使用相册";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
@@ -379,6 +385,17 @@
 		};
 /* End XCLocalSwiftPackageReference section */
 
+/* Begin XCRemoteSwiftPackageReference section */
+		D098DA7E305245D9001398C8 /* XCRemoteSwiftPackageReference "DebugSwift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/DebugSwift/DebugSwift.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.19.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
 /* Begin XCSwiftPackageProductDependency section */
 		D02FEB132FF61A900099797A /* TimelineKitUIiOS */ = {
 			isa = XCSwiftPackageProductDependency;
@@ -387,6 +404,11 @@
 		D02FEB172FF61A900099797A /* TimelineKitUIMac */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = TimelineKitUIMac;
+		};
+		D098DA7F305245D9001398C8 /* DebugSwift */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = D098DA7E305245D9001398C8 /* XCRemoteSwiftPackageReference "DebugSwift" */;
+			productName = DebugSwift;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

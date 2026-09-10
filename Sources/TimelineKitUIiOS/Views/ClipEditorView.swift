@@ -47,7 +47,7 @@ public struct ClipEditorView: View {
     private let trackMinHeight: CGFloat    = 140
 
     @State private var showAddMediaPicker = false
-    @State private var addMediaItem: PhotosPickerItem?
+    @State private var addMediaItems: [PhotosPickerItem] = []
     @State private var pendingVisualTrackID: UUID?
     @State private var pendingAudioTrackID: UUID?
     @State private var showExport = false
@@ -58,6 +58,12 @@ public struct ClipEditorView: View {
     @State private var showFullScreenPreview = false
 
     public var body: some View {
+        editorSheets(editorObservers(editorContent))
+    }
+
+    // MARK: - Editor Content (three-layer layout)
+
+    private var editorContent: some View {
         GeometryReader { geo in
             let previewHeight = UIDevice.current.userInterfaceIdiom == .pad ? geo.size.height * 0.62 : geo.size.height * 0.53
 
@@ -101,6 +107,12 @@ public struct ClipEditorView: View {
             }
             .animation(.spring(duration: 0.25), value: activeToolCategory)
         }
+    }
+
+    // MARK: - Sheets & Presentation Modifiers
+
+    func editorSheets(_ base: some View) -> some View {
+        base
         .background(Color(white: 0.08).ignoresSafeArea())
         .background(
             NavigationLink(
@@ -164,13 +176,20 @@ public struct ClipEditorView: View {
         }
         .photosPicker(
             isPresented: $showAddMediaPicker,
-            selection: $addMediaItem,
+            selection: $addMediaItems,
+            maxSelectionCount: 8,
             matching: .any(of: [.images, .videos]),
             photoLibrary: .shared()
         )
-        .onChange(of: addMediaItem) { _, item in
-            guard let item else { return }
-            Task { await loadAddMedia(item: item) }
+    }
+
+    // MARK: - Observers & Toolbar
+
+    func editorObservers(_ base: some View) -> some View {
+        base
+        .onChange(of: addMediaItems) { _, items in
+            guard !items.isEmpty else { return }
+            Task { await loadAddMedias(items: items) }
         }
         .onAppear {
             coordinator.attach(to: store)
@@ -236,17 +255,9 @@ public struct ClipEditorView: View {
             }
             guard let newCategory,
                   let segID = store.selection.singleSelectedID,
-                  let seg = store.timeline.segment(id: segID) else { return }
-            let matches: Bool
-            switch (newCategory, seg.content) {
-            case (.text, .text), (.text, .subtitle):       matches = true
-            case (.audio, .audio):                         matches = true
-            case (.clip, .video), (.clip, .image):         matches = true
-            case (.adjust, .video), (.adjust, .image):     matches = true
-            case (.animation, .video), (.animation, .image): matches = true
-            default:                                       matches = false
-            }
-            if !matches { store.selection.deselect() }
+                  let seg = store.timeline.segment(id: segID),
+                  !categoryMatchesSelection(newCategory, segment: seg) else { return }
+            store.selection.deselect()
         }
         .navigationBarBackButtonHidden(true)
         .toolbar {
@@ -424,50 +435,83 @@ public struct ClipEditorView: View {
         }
     }
 
+    // MARK: - Tool Category Dispatch
+
+    /// 判断工具类目切换后是否与当前选中片段的内容匹配（匹配则保留选中，
+    /// 不匹配则由调用方清除选中，让面板派发链落到新类目的默认面板）。
+    private func categoryMatchesSelection(
+        _ category: EditorToolCategory,
+        segment: EditorSegment
+    ) -> Bool {
+        switch (category, segment.content) {
+        case (.text, .text), (.text, .subtitle):           return true
+        case (.audio, .audio):                             return true
+        case (.clip, .video), (.clip, .image):             return true
+        case (.adjust, .video), (.adjust, .image):         return true
+        case (.animation, .video), (.animation, .image):   return true
+        default:                                           return false
+        }
+    }
+
     // MARK: - Add Media
 
-    private func loadAddMedia(item: PhotosPickerItem) async {
+    /// 多选导入：解码 → 批量落库（一次 IO）→ 按选择顺序逐个加时间线。
+    /// 单个 item 失败跳过不中断整批；所有片段一次 MainActor 批量插入。
+    private func loadAddMedias(items: [PhotosPickerItem]) async {
         let targetTrackID = await MainActor.run { pendingVisualTrackID }
         defer {
             Task { @MainActor in
-                addMediaItem = nil
+                addMediaItems = []
                 pendingVisualTrackID = nil
             }
         }
-        // Try video first.
-        if let movie = try? await item.loadTransferable(type: VideoTransferable.self) {
-            // 落库：系统临时副本复制进 .tlkbundle Media/（持久），再用库内 URL 加时间线。
-            let libraryURLs = await libraryStore.addMedia(urls: [movie.url])
-            guard let libraryURL = libraryURLs.first else { return }
-            let native = await avDuration(of: libraryURL) ?? 0
-            await MainActor.run {
-                store.addVisualSegment(
-                    localURL: libraryURL,
-                    nativeDuration: native,
-                    targetTrackID: targetTrackID
-                )
+
+        // 1) 逐 item 解码为源 URL（视频用系统副本；图片写 staging 文件）。
+        var pendingURLs: [URL] = []   // 待落库（按选择顺序）
+        var stagingFiles: [URL] = []  // 图片 staging（落库后清理）
+        for item in items {
+            if let movie = try? await item.loadTransferable(type: VideoTransferable.self) {
+                pendingURLs.append(movie.url)
+                continue
             }
-            return
+            if let data = try? await item.loadTransferable(type: Data.self) {
+                let ext = item.supportedContentTypes.first?.preferredFilenameExtension ?? "jpg"
+                let staging = FileManager.default.temporaryDirectory
+                    .appendingPathComponent(UUID().uuidString)
+                    .appendingPathExtension(ext)
+                do {
+                    try data.write(to: staging)
+                } catch {
+                    continue  // 单个失败跳过
+                }
+                stagingFiles.append(staging)
+                pendingURLs.append(staging)
+            }
         }
-        // Fallback: image.
-        if let data = try? await item.loadTransferable(type: Data.self) {
-            let ext = item.supportedContentTypes.first?.preferredFilenameExtension ?? "jpg"
-            // 图片 Data 先写临时文件，交给库复制（库内持久副本），临时文件即弃。
-            let staging = FileManager.default.temporaryDirectory
-                .appendingPathComponent(UUID().uuidString)
-                .appendingPathExtension(ext)
-            do {
-                try data.write(to: staging)
-            } catch {
-                return
-            }
-            let libraryURLs = await libraryStore.addMedia(urls: [staging])
-            try? FileManager.default.removeItem(at: staging)
-            guard let libraryURL = libraryURLs.first else { return }
-            await MainActor.run {
+        guard !pendingURLs.isEmpty else { return }
+
+        // 2) 批量落库：一次复制进 .tlkbundle Media/（持久），返回库内 URL（顺序一致）。
+        let libraryURLs = await libraryStore.addMedia(urls: pendingURLs)
+
+        // 3) 清理图片 staging 文件（库内已有持久副本）。
+        for url in stagingFiles {
+            try? FileManager.default.removeItem(at: url)
+        }
+        guard !libraryURLs.isEmpty else { return }
+
+        // 4) 逐个取时长（视频有、图片 nil），一次 MainActor 批量加时间线。
+        var segments: [(url: URL, native: Double?)] = []
+        for libraryURL in libraryURLs {
+            let type = try? libraryURL.resourceValues(forKeys: [.contentTypeKey]).contentType
+            let isVideo = type?.conforms(to: .movie) == true || type?.conforms(to: .video) == true
+            let native = isVideo ? await avDuration(of: libraryURL) : nil
+            segments.append((libraryURL, native))
+        }
+        await MainActor.run {
+            for (url, native) in segments {
                 store.addVisualSegment(
-                    localURL: libraryURL,
-                    nativeDuration: nil,
+                    localURL: url,
+                    nativeDuration: native,
                     targetTrackID: targetTrackID
                 )
             }

@@ -1,8 +1,7 @@
+
 //
 //  VideoEditorView.swift
-//  VideoEditorDemo
-//
-//  Created by xiaoyuan on 2026/7/1.
+//  MotionX
 //
 
 #if os(iOS)
@@ -10,62 +9,74 @@ import SwiftUI
 import TimelineKitUIShared
 import TimelineKitUIiOS
 
-/// iOS Demo 入口：项目列表页为根（对齐剪映项目页）。
-/// 打开/创建默认资源库（Documents/默认资源库.tlkbundle）后进入项目管理；
-/// 点击项目卡片 push 编辑页。
+/// MotionX's main entry point.
+/// Opens or creates the default project library, then displays the project browser.
 struct VideoEditorView: View {
     @State private var libraryStore = TimelineLibraryStore()
-    @State private var showOpenLibrayError: Bool = false
-    @State private var openLibrayError: Error?
+    @State private var showOpenLibraryError = false
+    @State private var openLibraryError: Error?
 
     var body: some View {
         NavigationStack {
             ProjectBrowserView(libraryStore: libraryStore)
                 .task {
-                    openLibray()
+                    openLibrary()
                 }
-                .alert("打开资源库失败", isPresented: $showOpenLibrayError, actions: {
-                    Button {
-                        let defaultLibraryURL = self.defaultLibraryURL
-                        try? FileManager.default.removeItem(at: defaultLibraryURL)
-                        try? libraryStore.createLibrary(at: defaultLibraryURL)
-                    } label: {
-                        Text("好的")
-                    }
-                    Button {
-                        
-                    } label: {
-                        Text("好的")
-                    }
-                }, message: {
-                    Text("资源库可能已经损坏，是否删除后重新创建")
-                })
+                .alert(
+                    "Unable to Open Library",
+                    isPresented: $showOpenLibraryError
+                ) {
+                    Button("Recreate Library", role: .destructive) {
+                        let url = defaultLibraryURL
 
+                        do {
+                            if FileManager.default.fileExists(
+                                atPath: url.path
+                            ) {
+                                try FileManager.default.removeItem(at: url)
+                            }
 
+                            try libraryStore.createLibrary(at: url)
+                            openLibraryError = nil
+                        } catch {
+                            openLibraryError = error
+                        }
+                    }
+
+                    Button("Cancel", role: .cancel) {}
+                } message: {
+                    Text(
+                        "The project library may be damaged. " +
+                        "Recreating it may delete existing projects. " +
+                        "Cancel if you want to keep your current data."
+                    )
+                }
         }
     }
 
-    func openLibray() {
-        // 打开或创建默认资源库（iOS 沙盒 Documents，持久、随 App 备份）。
-        let defaultLibraryURL = self.defaultLibraryURL
+    private func openLibrary() {
+        let url = defaultLibraryURL
+
         do {
-            if FileManager.default.fileExists(atPath: defaultLibraryURL.path) {
-                try libraryStore.openLibrary(at: defaultLibraryURL)
+            if FileManager.default.fileExists(atPath: url.path) {
+                try libraryStore.openLibrary(at: url)
             } else {
-                try libraryStore.createLibrary(at: defaultLibraryURL)
+                try libraryStore.createLibrary(at: url)
             }
-            
         } catch {
-            openLibrayError = error
-            showOpenLibrayError = true
+            openLibraryError = error
+            showOpenLibraryError = true
         }
     }
-    
-    var defaultLibraryURL: URL {
-        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
-            ?? FileManager.default.temporaryDirectory
-        let defaultLibraryURL = docs.appendingPathComponent("默认资源库.tlkbundle")
-        return defaultLibraryURL
+
+    private var defaultLibraryURL: URL {
+        let documents = FileManager.default.urls(
+            for: .documentDirectory,
+            in: .userDomainMask
+        ).first ?? FileManager.default.temporaryDirectory
+
+        // Keep the existing filename so existing projects can be found.
+        return documents.appendingPathComponent("默认资源库.tlkbundle")
     }
 }
 
@@ -75,6 +86,6 @@ struct VideoEditorView: View {
     if #available(iOS 18.0, *) {
         VideoEditorView()
     } else {
-        Text("Requires iOS 18")
+        Text("MotionX requires iOS 18 or later.")
     }
 }

@@ -1,3 +1,4 @@
+
 #if canImport(UIKit)
 import SwiftUI
 import TimelineKitCore
@@ -6,24 +7,25 @@ import TimelineKitUIShared
 // MARK: - Tool Category
 
 /// All top-level editing categories.
-/// Only `isEnabled` cases appear in the toolbar — set false to hide unfinished features.
 public enum EditorToolCategory: String, CaseIterable, Identifiable {
-    case clip       = "剪辑"
-    case audio      = "音频"   // V2: hidden until audio track editing is complete
-    case text       = "文字"   // V2: hidden — subtitle editing is context-triggered
-    case sticker    = "贴纸"   // V3
-    case effects    = "特效"   // V3
-    case transition = "转场"
-    case adjust     = "调节"
-    case animation  = "动画"   // V7: clip-level entrance/exit/combo animations
+    case clip = "Clip"
+    case audio = "Audio"
+    case text = "Text"
+    case sticker = "Stickers"
+    case effects = "Effects"
+    case transition = "Transition"
+    case adjust = "Adjust"
+    case animation = "Animation"
 
     public var id: String { rawValue }
 
-    /// Whether this category is shown in the toolbar. False = feature not yet shipped.
+    /// Only show categories that are available in this version.
     var isEnabled: Bool {
         switch self {
-        case .clip, .audio, .text, .transition, .adjust, .animation: return true
-        default: return false
+        case .clip, .audio, .text, .transition, .adjust, .animation:
+            return true
+        default:
+            return false
         }
     }
 
@@ -67,6 +69,7 @@ struct EditorBottomToolbar: View {
 
     private func categoryButton(for category: EditorToolCategory) -> some View {
         let isActive = activeCategory == category
+
         return Button {
             withAnimation(.spring(duration: 0.25)) {
                 activeCategory = isActive ? nil : category
@@ -76,6 +79,7 @@ struct EditorBottomToolbar: View {
                 Image(systemName: category.icon)
                     .font(.system(size: 22, weight: .regular))
                     .frame(width: 40, height: 28)
+
                 Text(category.rawValue)
                     .font(.system(size: 10, weight: .medium))
             }
@@ -90,8 +94,7 @@ struct EditorBottomToolbar: View {
 
 // MARK: - Secondary Tool Panel
 
-/// Context-sensitive panel that slides up above the toolbar when a category is active.
-/// Each category's interior is a stub — implement tools individually.
+/// Context-sensitive panel shown above the bottom toolbar.
 struct EditorSecondaryToolPanel: View {
     let category: EditorToolCategory
     let store: EditorStore
@@ -124,52 +127,69 @@ struct EditorSecondaryToolPanel: View {
         }
     }
 
-    // MARK: - Stubs per category
+    // MARK: - Tools per category
 
     @ViewBuilder
     private func toolStubs(for category: EditorToolCategory) -> some View {
         switch category {
         case .clip:
             let hasSelection = store.selection.hasSingleSelection
-            let selID = store.selection.singleSelectedID
+            let selectedID = store.selection.singleSelectedID
 
-            toolButton("分割", icon: "scissors.badge.ellipsis", enabled: hasSelection) {
-                guard let id = selID else { return }
+            toolButton("Split", icon: "scissors.badge.ellipsis", enabled: hasSelection) {
+                guard let id = selectedID else { return }
                 store.splitSegment(id: id, at: store.selection.playheadTime)
             }
-            toolButton("删除", icon: "trash", enabled: hasSelection) {
-                guard let id = selID else { return }
+
+            toolButton("Delete", icon: "trash", enabled: hasSelection) {
+                guard let id = selectedID else { return }
                 store.deleteSegment(id: id)
             }
-            toolButton("复制", icon: "doc.on.doc", enabled: hasSelection) {
-                guard let id = selID else { return }
+
+            toolButton("Duplicate", icon: "doc.on.doc", enabled: hasSelection) {
+                guard let id = selectedID else { return }
                 store.copySegment(id: id)
             }
-            toolButton("粘贴", icon: "doc.on.clipboard", enabled: store.hasClipboardSegment) {
-                store.pasteSegment(after: selID)
+
+            toolButton("Paste", icon: "doc.on.clipboard", enabled: store.hasClipboardSegment) {
+                store.pasteSegment(after: selectedID)
             }
 
         case .transition:
-            toolItem("转场", icon: "arrow.left.and.right.square")
+            toolItem("Transition", icon: "arrow.left.and.right.square")
 
         case .adjust:
-            // Curves / HSL / noise-reduction are V3 — hidden until shipped.
-            toolItem("调节", icon: "slider.horizontal.3")
+            toolItem("Adjust", icon: "slider.horizontal.3")
 
         case .text:
-            toolButton("新建文本", icon: "textformat", enabled: true) {
+            toolButton("Add Text", icon: "textformat", enabled: true) {
                 store.createNewTextSegment()
             }
-            toolButton("新建字幕", icon: "text.bubble", enabled: true) {
+
+            toolButton("Add Subtitle", icon: "text.bubble", enabled: true) {
                 store.createNewSubtitleSegment()
             }
 
-        default:
-            EmptyView()
+        case .audio:
+            toolItem("Audio", icon: "music.note")
+
+        case .animation:
+            toolItem("Animation", icon: "wand.and.stars")
+
+        case .sticker:
+            toolItem("Stickers", icon: "face.smiling")
+
+        case .effects:
+            toolItem("Effects", icon: "sparkles")
         }
     }
 
-    private func toolButton(_ label: String, icon: String, enabled: Bool, action: @escaping () -> Void) -> some View {
+    private func toolButton(
+        _ label: String,
+        icon: String,
+        enabled: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
         Button(action: action) {
             VStack(spacing: 6) {
                 Image(systemName: icon)
@@ -177,11 +197,14 @@ struct EditorSecondaryToolPanel: View {
                     .frame(width: 44, height: 36)
                     .background(Color.white.opacity(0.07))
                     .clipShape(RoundedRectangle(cornerRadius: 10))
+
                 Text(label)
                     .font(.system(size: 10, weight: .regular))
                     .foregroundStyle(Color.white.opacity(0.7))
             }
-            .foregroundStyle(enabled ? Color.white.opacity(0.85) : Color.white.opacity(0.35))
+            .foregroundStyle(
+                enabled ? Color.white.opacity(0.85) : Color.white.opacity(0.35)
+            )
             .frame(width: 60)
         }
         .buttonStyle(.plain)
@@ -195,6 +218,7 @@ struct EditorSecondaryToolPanel: View {
                 .frame(width: 44, height: 36)
                 .background(Color.white.opacity(0.07))
                 .clipShape(RoundedRectangle(cornerRadius: 10))
+
             Text(label)
                 .font(.system(size: 10, weight: .regular))
                 .foregroundStyle(Color.white.opacity(0.7))

@@ -1,157 +1,295 @@
+
 import Foundation
 
 // MARK: - SegmentAdjustment
 
-/// Per-segment color and tone adjustment parameters.
-///
-/// All values default to "no effect" (identity). The compositor skips the CIFilter
-/// chain entirely when `isIdentity` returns true, preserving v1 performance.
+/// Per-segment color, tone, and detail adjustments.
+/// All added values default to no effect.
 public struct SegmentAdjustment: Sendable, Hashable, Codable {
 
     // MARK: - Tone
 
-    /// CIColorControls.inputBrightness   — range: -1.0 … +1.0, default: 0
-    public var brightness:  Double
-    /// CIColorControls.inputContrast     — range: 0.5 … 1.5,  default: 1.0
-    public var contrast:    Double
-    /// CIColorControls.inputSaturation   — range: 0.0 … 2.0,  default: 1.0
-    public var saturation:  Double
+    /// CIColorControls brightness: -1...1
+    public var brightness: Double
+
+    /// CIColorControls contrast: 0.5...1.5
+    public var contrast: Double
+
+    /// CIColorControls saturation: 0...2
+    public var saturation: Double
+
+    /// CIExposureAdjust exposure bias, in EV.
+    public var exposure: Double
+
+    /// CIVibrance amount: -1...1
+    public var vibrance: Double
 
     // MARK: - Color Temperature
 
-    /// CITemperatureAndTint (Kelvin)     — range: 2000 … 9000, default: 6500
+    /// White balance temperature in Kelvin.
     public var temperature: Double
-    /// CITemperatureAndTint green/magenta — range: -150 … +150, default: 0
-    public var tint:        Double
 
-    // MARK: - Highlight / Shadow
+    /// Green/magenta tint adjustment.
+    public var tint: Double
 
-    /// CIHighlightShadowAdjust highlight — range: -1.0 … +1.0, default: 0
-    public var highlights:  Double
-    /// CIHighlightShadowAdjust shadow    — range: -1.0 … +1.0, default: 0
-    public var shadows:     Double
+    // MARK: - Highlights and Shadows
+
+    public var highlights: Double
+    public var shadows: Double
+
+    /// White point adjustment: -1...1
+    public var whites: Double
+
+    /// Black point adjustment: -1...1
+    public var blacks: Double
+
+    // MARK: - Detail and Style
+
+    /// Sharpening amount: 0...1
+    public var sharpen: Double
+
+    /// Local contrast amount: 0...1
+    public var clarity: Double
+
+    /// Faded look amount: 0...1
+    public var fade: Double
+
+    /// Vignette amount: 0...1
+    public var vignette: Double
+
+    /// Film grain amount: 0...1
+    public var grain: Double
 
     // MARK: - Preset Filter
 
-    /// System CIPhotoEffect filter name, or nil for no preset.
-    public var filterName:      PresetFilter?
-    /// Mix intensity with original frame  — range: 0.0 … 1.0, default: 1.0
+    public var filterName: PresetFilter?
     public var filterIntensity: Double
 
-    // MARK: - Init
+    // MARK: - Initializer
 
     public init(
-        brightness:      Double = 0,
-        contrast:        Double = 1.0,
-        saturation:      Double = 1.0,
-        temperature:     Double = 6500,
-        tint:            Double = 0,
-        highlights:      Double = 0,
-        shadows:         Double = 0,
-        filterName:      PresetFilter? = nil,
-        filterIntensity: Double = 1.0
+        brightness: Double = 0,
+        contrast: Double = 1,
+        saturation: Double = 1,
+        temperature: Double = 6500,
+        tint: Double = 0,
+        highlights: Double = 0,
+        shadows: Double = 0,
+        filterName: PresetFilter? = nil,
+        filterIntensity: Double = 1,
+        exposure: Double = 0,
+        vibrance: Double = 0,
+        whites: Double = 0,
+        blacks: Double = 0,
+        sharpen: Double = 0,
+        clarity: Double = 0,
+        fade: Double = 0,
+        vignette: Double = 0,
+        grain: Double = 0
     ) {
-        self.brightness      = brightness
-        self.contrast        = contrast
-        self.saturation      = saturation
-        self.temperature     = temperature
-        self.tint            = tint
-        self.highlights      = highlights
-        self.shadows         = shadows
-        self.filterName      = filterName
+        self.brightness = brightness
+        self.contrast = contrast
+        self.saturation = saturation
+        self.temperature = temperature
+        self.tint = tint
+        self.highlights = highlights
+        self.shadows = shadows
+        self.filterName = filterName
         self.filterIntensity = filterIntensity
+
+        self.exposure = exposure
+        self.vibrance = vibrance
+        self.whites = whites
+        self.blacks = blacks
+        self.sharpen = sharpen
+        self.clarity = clarity
+        self.fade = fade
+        self.vignette = vignette
+        self.grain = grain
     }
 
-    /// All parameters at their default (no-op) values.
+    // MARK: - Identity
+
     public static let identity = SegmentAdjustment()
 
-    /// True when every parameter is at its identity value → compositor short-circuits.
+    /// True when every adjustment is at its default value.
     public var isIdentity: Bool {
-        brightness  == 0    &&
-        contrast    == 1.0  &&
-        saturation  == 1.0  &&
+        brightness == 0 &&
+        contrast == 1 &&
+        saturation == 1 &&
         temperature == 6500 &&
-        tint        == 0    &&
-        highlights  == 0    &&
-        shadows     == 0    &&
-        filterName  == nil
+        tint == 0 &&
+        highlights == 0 &&
+        shadows == 0 &&
+        exposure == 0 &&
+        vibrance == 0 &&
+        whites == 0 &&
+        blacks == 0 &&
+        sharpen == 0 &&
+        clarity == 0 &&
+        fade == 0 &&
+        vignette == 0 &&
+        grain == 0 &&
+        filterName == nil
+    }
+
+    // MARK: - Backward-Compatible Decoding
+
+    private enum CodingKeys: String, CodingKey {
+        case brightness, contrast, saturation
+        case temperature, tint
+        case highlights, shadows
+        case filterName, filterIntensity
+        case exposure, vibrance, whites, blacks
+        case sharpen, clarity, fade, vignette, grain
+    }
+
+    public init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+
+        brightness = try values.decodeIfPresent(
+            Double.self, forKey: .brightness
+        ) ?? 0
+
+        contrast = try values.decodeIfPresent(
+            Double.self, forKey: .contrast
+        ) ?? 1
+
+        saturation = try values.decodeIfPresent(
+            Double.self, forKey: .saturation
+        ) ?? 1
+
+        temperature = try values.decodeIfPresent(
+            Double.self, forKey: .temperature
+        ) ?? 6500
+
+        tint = try values.decodeIfPresent(
+            Double.self, forKey: .tint
+        ) ?? 0
+
+        highlights = try values.decodeIfPresent(
+            Double.self, forKey: .highlights
+        ) ?? 0
+
+        shadows = try values.decodeIfPresent(
+            Double.self, forKey: .shadows
+        ) ?? 0
+
+        filterName = try values.decodeIfPresent(
+            PresetFilter.self, forKey: .filterName
+        )
+
+        filterIntensity = try values.decodeIfPresent(
+            Double.self, forKey: .filterIntensity
+        ) ?? 1
+
+        exposure = try values.decodeIfPresent(
+            Double.self, forKey: .exposure
+        ) ?? 0
+
+        vibrance = try values.decodeIfPresent(
+            Double.self, forKey: .vibrance
+        ) ?? 0
+
+        whites = try values.decodeIfPresent(
+            Double.self, forKey: .whites
+        ) ?? 0
+
+        blacks = try values.decodeIfPresent(
+            Double.self, forKey: .blacks
+        ) ?? 0
+
+        sharpen = try values.decodeIfPresent(
+            Double.self, forKey: .sharpen
+        ) ?? 0
+
+        clarity = try values.decodeIfPresent(
+            Double.self, forKey: .clarity
+        ) ?? 0
+
+        fade = try values.decodeIfPresent(
+            Double.self, forKey: .fade
+        ) ?? 0
+
+        vignette = try values.decodeIfPresent(
+            Double.self, forKey: .vignette
+        ) ?? 0
+
+        grain = try values.decodeIfPresent(
+            Double.self, forKey: .grain
+        ) ?? 0
     }
 }
 
 // MARK: - PresetFilter
 
-/// Built-in CIPhotoEffect presets surfaced in the adjustment panel.
-/// Raw value = stable case name (used for serialization).
-/// Use `ciFilterName` to get the Core Image filter identifier.
+/// Built-in Core Image presets.
+/// Case names are preserved for saved-project compatibility.
 public enum PresetFilter: String, Sendable, Hashable, Codable, CaseIterable {
 
-    // Natural
     case naturalVivid
     case naturalWarm
     case naturalCool
     case naturalSoft
 
-    // Cinematic
     case cinemaChrome
     case cinemaNoir
     case cinemaInstant
     case cinemaMono
 
-    // Retro (some share a CIFilter name with Natural — intentional, different UI category)
     case retroTransfer
     case retroFade
     case retroProcess
     case retroSepia
 
-    // MARK: - Core Image filter name
-
     public var ciFilterName: String {
         switch self {
-        case .naturalVivid:   return "CIVibrance"
-        case .naturalWarm:    return "CIPhotoEffectProcess"
-        case .naturalCool:    return "CIPhotoEffectFade"
-        case .naturalSoft:    return "CIPhotoEffectTonal"
-        case .cinemaChrome:   return "CIPhotoEffectChrome"
-        case .cinemaNoir:     return "CIPhotoEffectNoir"
-        case .cinemaInstant:  return "CIPhotoEffectInstant"
-        case .cinemaMono:     return "CIPhotoEffectMono"
-        case .retroTransfer:  return "CIPhotoEffectTransfer"
-        case .retroFade:      return "CIPhotoEffectFade"
-        case .retroProcess:   return "CIPhotoEffectProcess"
-        case .retroSepia:     return "CISepiaTone"
+        case .naturalVivid: return "CIVibrance"
+        case .naturalWarm: return "CIPhotoEffectProcess"
+        case .naturalCool: return "CIPhotoEffectFade"
+        case .naturalSoft: return "CIPhotoEffectTonal"
+        case .cinemaChrome: return "CIPhotoEffectChrome"
+        case .cinemaNoir: return "CIPhotoEffectNoir"
+        case .cinemaInstant: return "CIPhotoEffectInstant"
+        case .cinemaMono: return "CIPhotoEffectMono"
+        case .retroTransfer: return "CIPhotoEffectTransfer"
+        case .retroFade: return "CIPhotoEffectFade"
+        case .retroProcess: return "CIPhotoEffectProcess"
+        case .retroSepia: return "CISepiaTone"
         }
     }
 
-    // MARK: - UI metadata
-
     public var displayName: String {
         switch self {
-        case .naturalVivid:   return "鲜艳"
-        case .naturalWarm:    return "暖调"
-        case .naturalCool:    return "冷调"
-        case .naturalSoft:    return "柔和"
-        case .cinemaChrome:   return "铬黄"
-        case .cinemaNoir:     return "黑白"
-        case .cinemaInstant:  return "拍立得"
-        case .cinemaMono:     return "单色"
-        case .retroTransfer:  return "转印"
-        case .retroFade:      return "褪色"
-        case .retroProcess:   return "冲印"
-        case .retroSepia:     return "棕褐"
+        case .naturalVivid: return "Vivid"
+        case .naturalWarm: return "Warm"
+        case .naturalCool: return "Cool"
+        case .naturalSoft: return "Soft"
+        case .cinemaChrome: return "Chrome"
+        case .cinemaNoir: return "Noir"
+        case .cinemaInstant: return "Instant"
+        case .cinemaMono: return "Monochrome"
+        case .retroTransfer: return "Transfer"
+        case .retroFade: return "Retro Fade"
+        case .retroProcess: return "Retro Process"
+        case .retroSepia: return "Sepia"
         }
     }
 
     public var category: Category {
         switch self {
-        case .naturalVivid, .naturalWarm, .naturalCool, .naturalSoft: return .natural
-        case .cinemaChrome, .cinemaNoir, .cinemaInstant, .cinemaMono: return .cinematic
-        case .retroTransfer, .retroFade, .retroProcess, .retroSepia:  return .retro
+        case .naturalVivid, .naturalWarm, .naturalCool, .naturalSoft:
+            return .natural
+        case .cinemaChrome, .cinemaNoir, .cinemaInstant, .cinemaMono:
+            return .cinematic
+        case .retroTransfer, .retroFade, .retroProcess, .retroSepia:
+            return .retro
         }
     }
 
     public enum Category: String, CaseIterable {
-        case natural   = "自然"
-        case cinematic = "电影"
-        case retro     = "复古"
+        case natural = "Natural"
+        case cinematic = "Cinematic"
+        case retro = "Retro"
     }
 }

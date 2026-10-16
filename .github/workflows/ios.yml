@@ -8,7 +8,7 @@ on:
 
 jobs:
   build:
-    name: Build MotionX for iOS
+    name: Build MotionX for iPhone
     runs-on: macos-latest
 
     steps:
@@ -20,22 +20,41 @@ jobs:
           xcode-select -p
           xcodebuild -version
 
-      - name: Build MotionX
+      - name: Build MotionX for iPhone
         working-directory: Examples/VideoEditorDemo
         run: |
+          set -o pipefail
+
           xcodebuild \
             -project VideoEditorDemo.xcodeproj \
             -scheme VideoEditorDemo \
             -configuration Release \
-            -sdk iphonesimulator \
-            -destination 'generic/platform=iOS Simulator' \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
             -derivedDataPath "$RUNNER_TEMP/MotionXBuild" \
             CODE_SIGNING_ALLOWED=NO \
             build
 
-      - name: Upload simulator build
+      - name: Package IPA
+        run: |
+          set -e
+
+          APP_PATH="$RUNNER_TEMP/MotionXBuild/Build/Products/Release-iphoneos/VideoEditorDemo.app"
+
+          if [ ! -d "$APP_PATH" ]; then
+            echo "Build failed: VideoEditorDemo.app was not found."
+            exit 1
+          fi
+
+          mkdir -p "$RUNNER_TEMP/ipa/Payload"
+          cp -R "$APP_PATH" "$RUNNER_TEMP/ipa/Payload/"
+          cd "$RUNNER_TEMP/ipa"
+
+          zip -r MotionX.ipa Payload
+
+      - name: Upload MotionX IPA
         uses: actions/upload-artifact@v4
         with:
-          name: MotionX-iOS-Simulator-Build
-          path: ${{ runner.temp }}/MotionXBuild/Build/Products/Release-iphonesimulator/
+          name: MotionX-iPhone-IPA
+          path: ${{ runner.temp }}/ipa/MotionX.ipa
           if-no-files-found: error

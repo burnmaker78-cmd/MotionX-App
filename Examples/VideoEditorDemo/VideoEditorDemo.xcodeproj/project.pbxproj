@@ -383,7 +383,7 @@
 /* Begin XCLocalSwiftPackageReference section */
 		D02FEB152FF631B40099797A /* XCLocalSwiftPackageReference "../../../TimelineKit" */ = {
 			isa = XCLocalSwiftPackageReference;
-			relativePath = ../../../TimelineKit;
+			relativePath = ../..;
 		};
 /* End XCLocalSwiftPackageReference section */
 

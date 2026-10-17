@@ -88,9 +88,9 @@ public struct ExportConfig: Codable, Sendable, Hashable {
 
         public var label: String {
             switch self {
-            case .low:         "较低"
-            case .recommended: "推荐"
-            case .high:        "较高"
+            case .low:         "Low"
+            case .recommended: "Recommended"
+            case .high:        "High"
             }
         }
     }

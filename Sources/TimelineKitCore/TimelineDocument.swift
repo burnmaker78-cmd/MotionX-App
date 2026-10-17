@@ -101,7 +101,7 @@ public final class TimelineDocument: Identifiable {
             !t.isMainTrack && t.segments.contains(where: { $0.id == id })
         })?.id
 
-        mutate("删除片段") { tl in
+        mutate("Delete Clip") { tl in
             tl.removeSegment(id: id)
             if isOnMainTrack { tl.repackMainTrack() }
             if let hostID = hostTrackID,
@@ -137,7 +137,7 @@ public final class TimelineDocument: Identifiable {
             newSourceRight = TimeRange(start: src.start + splitOffset, duration: rightDur)
         }
         let rightID = UUID()
-        mutate("分割片段") { tl in
+        mutate("Split Clip") { tl in
             guard let si = tl.tracks[trackIdx].segments.firstIndex(where: { $0.id == id }) else { return }
             tl.tracks[trackIdx].segments[si].targetRange = newTargetLeft
             tl.tracks[trackIdx].segments[si].sourceRange = newSourceLeft
@@ -176,7 +176,7 @@ public final class TimelineDocument: Identifiable {
             speed: copied.speed, transform: copied.transform, blendMode: copied.blendMode,
             content: copied.content, adjustment: copied.adjustment
         )
-        mutate("粘贴片段") { tl in
+        mutate("Paste Clip") { tl in
             guard let ti = tl.tracks.firstIndex(where: { $0.id == trackID }) else { return }
             tl.tracks[ti].segments.append(newSeg)
             tl.tracks[ti].segments.sort { $0.targetRange.start < $1.targetRange.start }
@@ -188,7 +188,7 @@ public final class TimelineDocument: Identifiable {
 
     public func trimSegment(id: UUID, newTargetRange: TimeRange, newSourceRangeStart: Double? = nil) {
         if timeline.mainTrack?.segment(id: id) != nil {
-            mutate("裁剪片段") { tl in
+            mutate("Trim Clip") { tl in
                 guard let ti = tl.tracks.firstIndex(where: { $0.isMainTrack }),
                       let si = tl.tracks[ti].segments.firstIndex(where: { $0.id == id }) else { return }
                 let oldStart = tl.tracks[ti].segments[si].targetRange.start
@@ -213,7 +213,7 @@ public final class TimelineDocument: Identifiable {
                 }
             }
         } else if let seg = timeline.segment(id: id), seg.isAudio {
-            mutate("裁剪片段") { tl in
+            mutate("Trim Clip") { tl in
                 tl.updateSegment(id: id) { seg in
                     seg.targetRange = newTargetRange
                     if let newStart = newSourceRangeStart, var sr = seg.sourceRange {
@@ -222,7 +222,7 @@ public final class TimelineDocument: Identifiable {
                 }
             }
         } else {
-            mutateSubtitle("裁剪片段") { tl in
+            mutateSubtitle("Trim Clip") { tl in
                 tl.updateSegment(id: id) { seg in
                     seg.targetRange = newTargetRange
                     if let newStart = newSourceRangeStart, var sr = seg.sourceRange {
@@ -234,7 +234,7 @@ public final class TimelineDocument: Identifiable {
     }
 
     public func moveSegment(id: UUID, to newStart: Double) {
-        mutate("移动片段") { tl in
+        mutate("Move Clip") { tl in
             tl.updateSegment(id: id) { seg in
                 seg.targetRange = TimeRange(start: newStart, duration: seg.targetRange.duration)
             }
@@ -242,7 +242,7 @@ public final class TimelineDocument: Identifiable {
     }
 
     public func reorderSegments(trackID: UUID, newOrder: [UUID]) {
-        mutate("重排片段") { tl in
+        mutate("Reorder Clip") { tl in
             var needsTransitionCleanup: [UUID]?
             tl.updateTrack(id: trackID) { track in
                 let segMap = Dictionary(uniqueKeysWithValues: track.segments.map { ($0.id, $0) })
@@ -269,7 +269,7 @@ public final class TimelineDocument: Identifiable {
 
     // MARK: - Text/Subtitle Mutations
 
-    public func mutateTextContent(segmentID: UUID, label: String = "编辑文字", _ modify: (inout SegmentContent.TextContent) -> Void) {
+    public func mutateTextContent(segmentID: UUID, label: String = "Edit Text", _ modify: (inout SegmentContent.TextContent) -> Void) {
         mutateSubtitle(label) { tl in
             tl.updateSegment(id: segmentID) { seg in
                 guard case .text(var c) = seg.content else { return }
@@ -278,7 +278,7 @@ public final class TimelineDocument: Identifiable {
         }
     }
 
-    public func mutateTextStyle(segmentID: UUID, label: String = "修改样式", _ modify: (inout TextStyle) -> Void) {
+    public func mutateTextStyle(segmentID: UUID, label: String = "Edit Style", _ modify: (inout TextStyle) -> Void) {
         mutateTextContent(segmentID: segmentID, label: label) { modify(&$0.style) }
     }
 
@@ -287,18 +287,18 @@ public final class TimelineDocument: Identifiable {
     }
 
     public func updateTextPosition(segmentID: UUID, position: NormalizedPoint) {
-        mutateTextContent(segmentID: segmentID, label: "移动文字") { $0.position = position }
+        mutateTextContent(segmentID: segmentID, label: "Move Text") { $0.position = position }
     }
 
     public func updateSubtitlePosition(segmentID: UUID, positionY: Double) {
-        mutateSubtitleContent(segmentID: segmentID, label: "移动字幕") { $0.positionY = positionY.clamped(to: 0...1) }
+        mutateSubtitleContent(segmentID: segmentID, label: "Move Subtitle") { $0.positionY = positionY.clamped(to: 0...1) }
     }
 
     public func updateTextStyle(segmentID: UUID, style: TextStyle) {
         mutateTextStyle(segmentID: segmentID) { $0 = style }
     }
 
-    public func mutateSubtitleContent(segmentID: UUID, label: String = "编辑字幕", _ modify: (inout SegmentContent.SubtitleContent) -> Void) {
+    public func mutateSubtitleContent(segmentID: UUID, label: String = "Edit Subtitle", _ modify: (inout SegmentContent.SubtitleContent) -> Void) {
         mutateSubtitle(label) { tl in
             tl.updateSegment(id: segmentID) { seg in
                 guard case .subtitle(var c) = seg.content else { return }
@@ -307,7 +307,7 @@ public final class TimelineDocument: Identifiable {
         }
     }
 
-    public func mutateSubtitleStyle(segmentID: UUID, label: String = "修改字幕样式", _ modify: (inout TextStyle) -> Void) {
+    public func mutateSubtitleStyle(segmentID: UUID, label: String = "Edit Subtitle Style", _ modify: (inout TextStyle) -> Void) {
         mutateSubtitleContent(segmentID: segmentID, label: label) { modify(&$0.style) }
     }
 
@@ -333,9 +333,9 @@ public final class TimelineDocument: Identifiable {
         }
         guard let seg = timeline.segment(id: segmentID) else { return }
         if seg.isSubtitle {
-            mutateSubtitleStyle(segmentID: segmentID, label: "应用预设样式", applyToStyle)
+            mutateSubtitleStyle(segmentID: segmentID, label: "Apply Preset Style", applyToStyle)
         } else if seg.isText {
-            mutateTextStyle(segmentID: segmentID, label: "应用预设样式", applyToStyle)
+            mutateTextStyle(segmentID: segmentID, label: "Apply Preset Style", applyToStyle)
         }
     }
 
@@ -372,14 +372,14 @@ public final class TimelineDocument: Identifiable {
                 }
             }
         }
-        mutateSubtitle("应用到本轨同类", body)
+        mutateSubtitle("Apply to Similar Clips on Track", body)
         return mutatedCount
     }
 
     public func setTextAlignment(segmentID: UUID, alignment: TextAlignment) {
         guard let seg = timeline.segment(id: segmentID) else { return }
-        if seg.isSubtitle { mutateSubtitleStyle(segmentID: segmentID, label: "文本对齐") { $0.alignment = alignment } }
-        else if seg.isText { mutateTextStyle(segmentID: segmentID, label: "文本对齐") { $0.alignment = alignment } }
+        if seg.isSubtitle { mutateSubtitleStyle(segmentID: segmentID, label: "Align Text") { $0.alignment = alignment } }
+        else if seg.isText { mutateTextStyle(segmentID: segmentID, label: "Align Text") { $0.alignment = alignment } }
     }
 
     // MARK: - Style Clipboard
@@ -404,9 +404,9 @@ public final class TimelineDocument: Identifiable {
     public func pasteStyle(segmentID: UUID) {
         guard canPasteStyle(toSegmentID: segmentID), let cb = styleClipboard else { return }
         if timeline.segment(id: segmentID)?.isSubtitle == true {
-            mutateSubtitleStyle(segmentID: segmentID, label: "粘贴样式") { $0 = cb.style }
+            mutateSubtitleStyle(segmentID: segmentID, label: "Paste Style") { $0 = cb.style }
         } else {
-            mutateTextStyle(segmentID: segmentID, label: "粘贴样式") { $0 = cb.style }
+            mutateTextStyle(segmentID: segmentID, label: "Paste Style") { $0 = cb.style }
         }
     }
 
@@ -434,7 +434,7 @@ public final class TimelineDocument: Identifiable {
         case .forward: let higher = othersZ.filter { $0 > currentZ }.sorted(); newZ = higher.first ?? (currentZ + 1)
         case .backward: let lower = othersZ.filter { $0 < currentZ }.sorted(by: >); newZ = lower.first ?? (currentZ - 1)
         }
-        mutateSubtitle("调整层级") { tl in tl.updateSegment(id: segmentID) { $0.userZOrder = newZ } }
+        mutateSubtitle("Adjust Layer Order") { tl in tl.updateSegment(id: segmentID) { $0.userZOrder = newZ } }
     }
 
     // MARK: - Track Management
@@ -448,7 +448,7 @@ public final class TimelineDocument: Identifiable {
         let newID = UUID()
         let newTrack = EditorTrack(id: newID, kind: kind, label: resolvedLabel, zPosition: resolvedZ, segments: [], isMainTrack: false, pendingUserCreated: pendingUserCreated)
         let body: (inout EditorTimeline) -> Void = { tl in tl.tracks.append(newTrack) }
-        switch kind { case .text, .subtitle: mutateSubtitle("新建轨道", body); default: mutate("新建轨道", body) }
+        switch kind { case .text, .subtitle: mutateSubtitle("Create Track", body); default: mutate("Create Track", body) }
         if pendingUserCreated { schedulePendingCleanup(for: newID) }
         return newID
     }
@@ -459,7 +459,7 @@ public final class TimelineDocument: Identifiable {
             guard let ti = tl.tracks.firstIndex(where: { $0.id == trackID }) else { return }
             tl.tracks[ti].insert(segment); if tl.tracks[ti].pendingUserCreated { tl.tracks[ti].pendingUserCreated = false }
         }
-        if Self.segmentTriggersRebuild(segment) { mutate("添加片段", body) } else { mutateSubtitle("添加片段", body) }
+        if Self.segmentTriggersRebuild(segment) { mutate("Add Clip", body) } else { mutateSubtitle("Add Clip", body) }
         cancelPendingCleanup(for: trackID)
     }
 
@@ -476,14 +476,14 @@ public final class TimelineDocument: Identifiable {
         let newID = UUID()
         let newTrack = EditorTrack(id: newID, kind: kind, label: resolvedLabel, zPosition: resolvedZ, segments: [segment], isMainTrack: false)
         let body: (inout EditorTimeline) -> Void = { tl in tl.tracks.append(newTrack) }
-        if Self.segmentTriggersRebuild(segment) { mutate("添加片段", body) } else { mutateSubtitle("添加片段", body) }
+        if Self.segmentTriggersRebuild(segment) { mutate("Add Clip", body) } else { mutateSubtitle("Add Clip", body) }
         return newID
     }
 
     public func removeTrackIfEmpty(id: UUID) {
         guard let track = timeline.track(id: id), !track.isMainTrack, track.segments.isEmpty else { return }
         let body: (inout EditorTimeline) -> Void = { tl in tl.tracks.removeAll { $0.id == id } }
-        switch track.kind { case .text, .subtitle: mutateSubtitle("删除空轨", body); default: mutate("删除空轨", body) }
+        switch track.kind { case .text, .subtitle: mutateSubtitle("Remove Empty Track", body); default: mutate("Remove Empty Track", body) }
         cancelPendingCleanup(for: id)
     }
 
@@ -499,7 +499,7 @@ public final class TimelineDocument: Identifiable {
     }
 
     public static func displayName(for kind: EditorTrack.Kind) -> String {
-        switch kind { case .video: "视频"; case .overlay: "叠加"; case .text: "文字"; case .subtitle: "字幕"; case .audio: "音频"; case .adjustment: "调节" }
+        switch kind { case .video: "Video"; case .overlay: "Overlay"; case .text: "Text"; case .subtitle: "Subtitle"; case .audio: "Audio"; case .adjustment: "Adjustment" }
     }
 
     public static func segmentTriggersRebuild(_ segment: EditorSegment) -> Bool {
@@ -540,11 +540,11 @@ public final class TimelineDocument: Identifiable {
     }
 
     public func setAdjustment(segmentID: UUID, adjustment: SegmentAdjustment) {
-        mutate("调色") { tl in tl.updateSegment(id: segmentID) { $0.adjustment = adjustment } }
+        mutate("Color Adjustment") { tl in tl.updateSegment(id: segmentID) { $0.adjustment = adjustment } }
     }
 
     public func resetAdjustment(segmentID: UUID) {
-        mutate("重置调色") { tl in tl.updateSegment(id: segmentID) { $0.adjustment = .identity } }
+        mutate("Reset Color Adjustment") { tl in tl.updateSegment(id: segmentID) { $0.adjustment = .identity } }
     }
 
     public func previewClipAnimation(segmentID: UUID, animation: ClipAnimation) {
@@ -552,11 +552,11 @@ public final class TimelineDocument: Identifiable {
     }
 
     public func setClipAnimation(segmentID: UUID, animation: ClipAnimation) {
-        mutate("设置动画") { tl in tl.updateSegment(id: segmentID) { $0.setAnimation(animation) } }
+        mutate("Set Animation") { tl in tl.updateSegment(id: segmentID) { $0.setAnimation(animation) } }
     }
 
     public func removeClipAnimation(segmentID: UUID, timing: AnimationTiming) {
-        mutate("移除动画") { tl in tl.updateSegment(id: segmentID) { $0.removeAnimation(timing: timing) } }
+        mutate("Remove Animation") { tl in tl.updateSegment(id: segmentID) { $0.removeAnimation(timing: timing) } }
     }
 
     // MARK: - Transitions
@@ -564,43 +564,43 @@ public final class TimelineDocument: Identifiable {
     @discardableResult
     public func addTransition(between leadingID: UUID, and trailingID: UUID, type: EditorTransition.TransitionType = .fade, duration: Double = 0.5) -> EditorTransition? {
         var result: EditorTransition?
-        mutate("添加转场") { tl in result = tl.addTransition(between: leadingID, and: trailingID, type: type, duration: duration) }
+        mutate("Add Transition") { tl in result = tl.addTransition(between: leadingID, and: trailingID, type: type, duration: duration) }
         return result
     }
 
     @discardableResult
     public func addTransition(between leadingID: UUID, and trailingID: UUID, presetID: String, duration: Double = 0.5) -> EditorTransition? {
         var result: EditorTransition?
-        mutate("添加转场") { tl in result = tl.addTransition(between: leadingID, and: trailingID, presetID: presetID, duration: duration) }
+        mutate("Add Transition") { tl in result = tl.addTransition(between: leadingID, and: trailingID, presetID: presetID, duration: duration) }
         return result
     }
 
-    public func removeTransition(id: UUID) { mutate("删除转场") { tl in tl.removeTransition(id: id) } }
-    public func updateTransitionDuration(id: UUID, duration: Double) { mutate("调整转场时长") { tl in tl.updateTransitionDuration(id: id, duration: duration) } }
-    public func updateTransitionType(id: UUID, type: EditorTransition.TransitionType) { mutate("切换转场类型") { tl in tl.updateTransitionType(id: id, type: type) } }
-    public func updateTransitionPreset(id: UUID, presetID: String, duration: Double? = nil) { mutate("切换转场") { tl in tl.updateTransitionPreset(id: id, presetID: presetID, duration: duration) } }
+    public func removeTransition(id: UUID) { mutate("Delete Transition") { tl in tl.removeTransition(id: id) } }
+    public func updateTransitionDuration(id: UUID, duration: Double) { mutate("Adjust Transition Duration") { tl in tl.updateTransitionDuration(id: id, duration: duration) } }
+    public func updateTransitionType(id: UUID, type: EditorTransition.TransitionType) { mutate("Change Transition Type") { tl in tl.updateTransitionType(id: id, type: type) } }
+    public func updateTransitionPreset(id: UUID, presetID: String, duration: Double? = nil) { mutate("Change Transition") { tl in tl.updateTransitionPreset(id: id, presetID: presetID, duration: duration) } }
 
     // MARK: - Track Lock/Hide
 
-    public func setTrackLocked(id: UUID, isLocked: Bool) { mutate(isLocked ? "锁定轨道" : "解锁轨道") { tl in tl.updateTrack(id: id) { $0.isLocked = isLocked } } }
+    public func setTrackLocked(id: UUID, isLocked: Bool) { mutate(isLocked ? "Lock Track" : "Unlock Track") { tl in tl.updateTrack(id: id) { $0.isLocked = isLocked } } }
 
     public func setTrackHidden(id: UUID, isHidden: Bool) {
         guard let track = timeline.track(id: id), !track.isMainTrack else { return }
-        mutate(isHidden ? "隐藏轨道" : "显示轨道") { tl in tl.updateTrack(id: id) { $0.isHidden = isHidden } }
+        mutate(isHidden ? "Hide Track" : "Show Track") { tl in tl.updateTrack(id: id) { $0.isHidden = isHidden } }
     }
 
     // MARK: - Audio Mutations (Core — not coordinator-dependent)
 
-    public func muteTrack(id: UUID, isMuted: Bool) { mutate(isMuted ? "静音轨道" : "取消静音") { tl in tl.updateTrack(id: id) { $0.isMuted = isMuted } } }
+    public func muteTrack(id: UUID, isMuted: Bool) { mutate(isMuted ? "Mute Track" : "Unmute") { tl in tl.updateTrack(id: id) { $0.isMuted = isMuted } } }
 
     public func setAudioVolume(segmentID: UUID, volume: Double) {
-        mutate("调整音量") { tl in tl.updateSegment(id: segmentID) { seg in
+        mutate("Adjust Volume") { tl in tl.updateSegment(id: segmentID) { seg in
             guard case .audio(var c) = seg.content else { return }; c.volume = max(0, min(volume, 2.0)); seg.content = .audio(c)
         } }
     }
 
     public func mutateAudioFade(segmentID: UUID, fadeIn: Double, fadeOut: Double) {
-        mutate("调整淡化") { tl in tl.updateSegment(id: segmentID) { seg in
+        mutate("Adjust Fade") { tl in tl.updateSegment(id: segmentID) { seg in
             guard case .audio(var c) = seg.content else { return }
             let halfMax = seg.targetRange.duration / 2
             c.fadeInDuration = max(0, min(fadeIn, halfMax)); c.fadeOutDuration = max(0, min(fadeOut, seg.targetRange.duration - c.fadeInDuration))
@@ -609,13 +609,13 @@ public final class TimelineDocument: Identifiable {
     }
 
     public func muteAudioSegment(id: UUID, isMuted: Bool) {
-        mutate(isMuted ? "静音片段" : "取消静音") { tl in tl.updateSegment(id: id) { seg in
+        mutate(isMuted ? "Mute Clip" : "Unmute") { tl in tl.updateSegment(id: id) { seg in
             guard case .audio(var c) = seg.content else { return }; c.isMuted = isMuted; seg.content = .audio(c)
         } }
     }
 
     public func setVideoMuted(segmentID: UUID, isMuted: Bool) {
-        mutate(isMuted ? "静音原音" : "恢复原音") { tl in tl.updateSegment(id: segmentID) { seg in
+        mutate(isMuted ? "Mute Original Audio" : "Restore Original Audio") { tl in tl.updateSegment(id: segmentID) { seg in
             guard case .video(var c) = seg.content else { return }; c.isMuted = isMuted; seg.content = .video(c)
         } }
     }
@@ -623,7 +623,7 @@ public final class TimelineDocument: Identifiable {
     public func applyImageAnimation(segmentID: UUID, preset: ImageAnimationPreset) {
         guard let seg = timeline.segment(id: segmentID), case .image = seg.content else { return }
         let kf = ImageAnimationPresetRegistry.keyframes(for: preset, duration: seg.targetRange.duration)
-        mutate("应用动画") { tl in tl.updateSegment(id: segmentID) { seg in
+        mutate("Apply Animation") { tl in tl.updateSegment(id: segmentID) { seg in
             guard case .image(var c) = seg.content else { return }
             c.keyframes = kf; c.animationPresetID = kf == nil ? nil : preset.rawValue; seg.content = .image(c)
         } }
@@ -631,7 +631,7 @@ public final class TimelineDocument: Identifiable {
 
     public func setAudioSpeed(segmentID: UUID, speed: Double) {
         let newSpeed = min(max(speed, Self.audioSpeedRange.lowerBound), Self.audioSpeedRange.upperBound)
-        mutate("调整音频速度") { tl in tl.updateSegment(id: segmentID) { seg in
+        mutate("Adjust Audio Speed") { tl in tl.updateSegment(id: segmentID) { seg in
             guard case .audio = seg.content else { return }
             let oldSpeed = max(seg.speed, 0.001); let sourceDur = max(seg.targetRange.duration * oldSpeed, 0.05)
             seg.speed = newSpeed; seg.targetRange = TimeRange(start: seg.targetRange.start, duration: max(sourceDur / newSpeed, 0.05))
@@ -643,7 +643,7 @@ public final class TimelineDocument: Identifiable {
     // MARK: - Material Replacement
 
     public func replaceSegmentMaterial(segmentID: UUID, localURL: URL, nativeDuration: Double?, clipInTime: Double? = nil) {
-        mutate("替换素材") { tl in
+        mutate("Replace Media") { tl in
             guard var seg = tl.segment(id: segmentID) else { return }
             let isIncomingVideo = nativeDuration != nil
             var asset = tl.materials[seg.materialID] ?? EditorAsset(id: seg.materialID, type: .image)

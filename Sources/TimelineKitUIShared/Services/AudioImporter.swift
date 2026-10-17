@@ -19,10 +19,10 @@ public actor AudioImporter {
 
         public var errorDescription: String? {
             switch self {
-            case .unsupportedFormat:   return "不支持的音频格式"
-            case .copyFailed(let e):   return "拷贝音频文件失败：\(e.localizedDescription)"
-            case .noAudioTrack:        return "选择的文件不包含音频轨道"
-            case .scopedAccessDenied:  return "无法访问该音频文件"
+            case .unsupportedFormat:   return "Unsupported audio format."
+            case .copyFailed(let e):   return "Failed to copy audio file: \(e.localizedDescription)"
+            case .noAudioTrack:        return "The selected file contains no audio track."
+            case .scopedAccessDenied:  return "Unable to access the audio file."
             }
         }
     }

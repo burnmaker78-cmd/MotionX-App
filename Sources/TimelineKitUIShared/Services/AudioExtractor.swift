@@ -21,10 +21,10 @@ public actor AudioExtractor {
 
         public var errorDescription: String? {
             switch self {
-            case .noAudioTrack:             return "该视频不包含音频轨道"
-            case .readerSetupFailed(let e): return "解码器初始化失败：\(e.localizedDescription)"
-            case .writerSetupFailed(let e): return "编码器初始化失败：\(e.localizedDescription)"
-            case .cancelled:                return "已取消"
+            case .noAudioTrack:             return "This video has no audio track."
+            case .readerSetupFailed(let e): return "Failed to initialize decoder: \(e.localizedDescription)"
+            case .writerSetupFailed(let e): return "Failed to initialize encoder: \(e.localizedDescription)"
+            case .cancelled:                return "Cancelled"
             case .underlying(let e):        return e.localizedDescription
             }
         }

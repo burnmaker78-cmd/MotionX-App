@@ -259,7 +259,7 @@ public final class VideoExporter {
             writer = try AVAssetWriter(outputURL: outURL, fileType: .mp4)
         } catch {
             throw NSError(domain: "VideoExporter", code: -1,
-                          userInfo: [NSLocalizedDescriptionKey: "无法创建 AVAssetWriter: \(error.localizedDescription)"])
+                          userInfo: [NSLocalizedDescriptionKey: "Unable to create AVAssetWriter: \(error.localizedDescription)"])
         }
         writer.shouldOptimizeForNetworkUse = true
 
@@ -274,7 +274,7 @@ public final class VideoExporter {
         videoInput.expectsMediaDataInRealTime = false
         guard writer.canAdd(videoInput) else {
             throw NSError(domain: "VideoExporter", code: -2,
-                          userInfo: [NSLocalizedDescriptionKey: "AVAssetWriter 不支持当前视频参数（codec/bitrate/colorSpace 组合）"])
+                          userInfo: [NSLocalizedDescriptionKey: "AVAssetWriter does not support the current video settings (codec/bitrate/color space combination)."])
         }
         writer.add(videoInput)
 
@@ -291,14 +291,14 @@ public final class VideoExporter {
             reader = try AVAssetReader(asset: result.composition)
         } catch {
             throw NSError(domain: "VideoExporter", code: -5,
-                          userInfo: [NSLocalizedDescriptionKey: "无法创建 AVAssetReader: \(error.localizedDescription)"])
+                          userInfo: [NSLocalizedDescriptionKey: "Unable to create AVAssetReader: \(error.localizedDescription)"])
         }
 
         // 4a. Video output（带 videoComposition → 应用所有 v1/v2/v3/v4 渲染效果 + V5 烘焙字幕）
         let videoTracks = try await result.composition.loadTracks(withMediaType: .video)
         guard !videoTracks.isEmpty else {
             throw NSError(domain: "VideoExporter", code: -8,
-                          userInfo: [NSLocalizedDescriptionKey: "composition 无视频轨道"])
+                          userInfo: [NSLocalizedDescriptionKey: "The composition has no video track."])
         }
         let videoReaderOutput = AVAssetReaderVideoCompositionOutput(
             videoTracks: videoTracks,
@@ -310,7 +310,7 @@ public final class VideoExporter {
         videoReaderOutput.alwaysCopiesSampleData = false
         guard reader.canAdd(videoReaderOutput) else {
             throw NSError(domain: "VideoExporter", code: -5,
-                          userInfo: [NSLocalizedDescriptionKey: "AVAssetReader 不支持视频输出"])
+                          userInfo: [NSLocalizedDescriptionKey: "AVAssetReader does not support video output."])
         }
         reader.add(videoReaderOutput)
 
@@ -339,14 +339,14 @@ public final class VideoExporter {
         // 5. 启动 writer + reader
         guard writer.startWriting() else {
             throw NSError(domain: "VideoExporter", code: -1,
-                          userInfo: [NSLocalizedDescriptionKey: "AVAssetWriter 启动失败: \(writer.error?.localizedDescription ?? "unknown")"])
+                          userInfo: [NSLocalizedDescriptionKey: "AVAssetWriter failed to start: \(writer.error?.localizedDescription ?? "unknown")"])
         }
         writer.startSession(atSourceTime: .zero)
 
         guard reader.startReading() else {
             writer.cancelWriting()
             throw NSError(domain: "VideoExporter", code: -5,
-                          userInfo: [NSLocalizedDescriptionKey: "AVAssetReader 启动失败: \(reader.error?.localizedDescription ?? "unknown")"])
+                          userInfo: [NSLocalizedDescriptionKey: "AVAssetReader failed to start: \(reader.error?.localizedDescription ?? "unknown")"])
         }
 
         // 6. 帧搬运：video + audio 并发拷贝
@@ -411,14 +411,14 @@ public final class VideoExporter {
         await writer.finishWriting()
 
         if writer.status != .completed {
-            let underlying = writer.error?.localizedDescription ?? "未知错误"
+            let underlying = writer.error?.localizedDescription ?? "Unknown error"
             throw NSError(domain: "VideoExporter", code: -3,
-                          userInfo: [NSLocalizedDescriptionKey: "导出未完成 (status: \(writer.status.rawValue)) \(underlying)"])
+                          userInfo: [NSLocalizedDescriptionKey: "Export incomplete (status: \(writer.status.rawValue)): \(underlying)"])
         }
         if reader.status == .failed {
-            let underlying = reader.error?.localizedDescription ?? "未知错误"
+            let underlying = reader.error?.localizedDescription ?? "Unknown error"
             throw NSError(domain: "VideoExporter", code: -5,
-                          userInfo: [NSLocalizedDescriptionKey: "读取失败: \(underlying)"])
+                          userInfo: [NSLocalizedDescriptionKey: "Read failed: \(underlying)"])
         }
 
         await MainActor.run { self.progress = 1.0 }
@@ -471,7 +471,7 @@ public final class VideoExporter {
                 )
                 guard let copy = newSample else {
                     throw NSError(domain: "VideoExporter", code: -4,
-                                  userInfo: [NSLocalizedDescriptionKey: "无法重建样本时序"])
+                                  userInfo: [NSLocalizedDescriptionKey: "Unable to rebuild sample timing."])
                 }
                 outSample = copy
             } else {
@@ -481,7 +481,7 @@ public final class VideoExporter {
             let ok = input.append(outSample)
             if !ok {
                 throw NSError(domain: "VideoExporter", code: -4,
-                              userInfo: [NSLocalizedDescriptionKey: "样本写入失败"])
+                              userInfo: [NSLocalizedDescriptionKey: "Failed to write sample."])
             }
             if let handler = progressHandler {
                 let pts = CMSampleBufferGetPresentationTimeStamp(outSample).seconds
@@ -641,7 +641,7 @@ public final class VideoExporter {
                 }
                 guard let pixelBuffer = pb else {
                     throw NSError(domain: "VideoExporter", code: -4,
-                                  userInfo: [NSLocalizedDescriptionKey: "创建 pixel buffer 失败"])
+                                  userInfo: [NSLocalizedDescriptionKey: "Failed to create pixel buffer."])
                 }
 
                 ciContext.render(composite, to: pixelBuffer,
@@ -657,7 +657,7 @@ public final class VideoExporter {
                 }
                 guard adaptor.append(pixelBuffer, withPresentationTime: presentationTime) else {
                     throw NSError(domain: "VideoExporter", code: -4,
-                                  userInfo: [NSLocalizedDescriptionKey: "写入帧失败 at frame \(i)"])
+                                  userInfo: [NSLocalizedDescriptionKey: "Failed to write frame \(i)."])
                 }
                 if let handler = progressHandler {
                     handler(compositionTime)
@@ -779,7 +779,7 @@ public final class VideoExporter {
             writer = try AVAssetWriter(outputURL: outURL, fileType: .mp4)
         } catch {
             throw NSError(domain: "VideoExporter", code: -1,
-                          userInfo: [NSLocalizedDescriptionKey: "无法创建 AVAssetWriter: \(error.localizedDescription)"])
+                          userInfo: [NSLocalizedDescriptionKey: "Unable to create AVAssetWriter: \(error.localizedDescription)"])
         }
         writer.shouldOptimizeForNetworkUse = true
         cancellationToken.addCancelHandler {
@@ -794,7 +794,7 @@ public final class VideoExporter {
         videoInput.expectsMediaDataInRealTime = false
         guard writer.canAdd(videoInput) else {
             throw NSError(domain: "VideoExporter", code: -2,
-                          userInfo: [NSLocalizedDescriptionKey: "AVAssetWriter 不支持当前视频参数"])
+                          userInfo: [NSLocalizedDescriptionKey: "AVAssetWriter does not support the current video settings."])
         }
         writer.add(videoInput)
 
@@ -815,7 +815,7 @@ public final class VideoExporter {
                 reader = try AVAssetReader(asset: result.composition)
             } catch {
                 throw NSError(domain: "VideoExporter", code: -5,
-                              userInfo: [NSLocalizedDescriptionKey: "无法创建 AVAssetReader: \(error.localizedDescription)"])
+                              userInfo: [NSLocalizedDescriptionKey: "Unable to create AVAssetReader: \(error.localizedDescription)"])
             }
             let output = AVAssetReaderAudioMixOutput(
                 audioTracks: audioTracks, audioSettings: nil
@@ -824,7 +824,7 @@ public final class VideoExporter {
             output.alwaysCopiesSampleData = false
             guard reader.canAdd(output) else {
                 throw NSError(domain: "VideoExporter", code: -5,
-                              userInfo: [NSLocalizedDescriptionKey: "AVAssetReader 不支持音频输出"])
+                              userInfo: [NSLocalizedDescriptionKey: "AVAssetReader does not support audio output."])
             }
             reader.add(output)
             audioReader = reader
@@ -852,14 +852,14 @@ public final class VideoExporter {
         // 6. Start writing
         guard writer.startWriting() else {
             throw NSError(domain: "VideoExporter", code: -1,
-                          userInfo: [NSLocalizedDescriptionKey: "AVAssetWriter 启动失败: \(writer.error?.localizedDescription ?? "unknown")"])
+                          userInfo: [NSLocalizedDescriptionKey: "AVAssetWriter failed to start: \(writer.error?.localizedDescription ?? "unknown")"])
         }
         writer.startSession(atSourceTime: .zero)
 
         if let ar = audioReader, !ar.startReading() {
             writer.cancelWriting()
             throw NSError(domain: "VideoExporter", code: -5,
-                          userInfo: [NSLocalizedDescriptionKey: "AVAssetReader 启动失败: \(ar.error?.localizedDescription ?? "unknown")"])
+                          userInfo: [NSLocalizedDescriptionKey: "AVAssetReader failed to start: \(ar.error?.localizedDescription ?? "unknown")"])
         }
 
         // 7. Progress tracking
@@ -917,14 +917,14 @@ public final class VideoExporter {
         await writer.finishWriting()
 
         if writer.status != .completed {
-            let underlying = writer.error?.localizedDescription ?? "未知错误"
+            let underlying = writer.error?.localizedDescription ?? "Unknown error"
             throw NSError(domain: "VideoExporter", code: -3,
-                          userInfo: [NSLocalizedDescriptionKey: "导出未完成 (status: \(writer.status.rawValue)) \(underlying)"])
+                          userInfo: [NSLocalizedDescriptionKey: "Export incomplete (status: \(writer.status.rawValue)): \(underlying)"])
         }
         if let ar = audioReader, ar.status == .failed {
-            let underlying = ar.error?.localizedDescription ?? "未知错误"
+            let underlying = ar.error?.localizedDescription ?? "Unknown error"
             throw NSError(domain: "VideoExporter", code: -5,
-                          userInfo: [NSLocalizedDescriptionKey: "读取失败: \(underlying)"])
+                          userInfo: [NSLocalizedDescriptionKey: "Read failed: \(underlying)"])
         }
 
         await MainActor.run { self.progress = 1.0 }
@@ -937,7 +937,7 @@ public final class VideoExporter {
         let status = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
         guard status == .authorized || status == .limited else {
             throw NSError(domain: "VideoExporter", code: -2,
-                          userInfo: [NSLocalizedDescriptionKey: "没有相册访问权限"])
+                          userInfo: [NSLocalizedDescriptionKey: "Photo library access is not authorized."])
         }
 
         // Verify the file is a valid video before passing it to Photos.
@@ -947,7 +947,7 @@ public final class VideoExporter {
             // Clean up the junk file so we don't litter Documents.
             try? FileManager.default.removeItem(at: url)
             throw NSError(domain: "VideoExporter", code: -7,
-                          userInfo: [NSLocalizedDescriptionKey: "导出文件中无有效视频轨道"])
+                          userInfo: [NSLocalizedDescriptionKey: "The exported file contains no valid video track."])
         }
         
         // VideoExporter 整体是 @MainActor。withCheckedThrowingContinuation 会挂起 Task、逻辑上让出主线程，但 Swift 并发运行时在某些 iOS 版本里不会立刻物理释放主线程的"所有权"。PHPhotoLibrary.performChanges 内部会往主队列回调做权限检查，与挂起的 continuation 争抢主线程，触发 reentrancy 崩溃（这就是日志里 "Enqueued from com.apple.main-thread" 的来源）。
@@ -975,7 +975,7 @@ public final class VideoExporter {
                     } else {
                         continuation.resume(throwing: error ?? NSError(
                             domain: "VideoExporter", code: -3,
-                            userInfo: [NSLocalizedDescriptionKey: "保存到相册失败"]))
+                            userInfo: [NSLocalizedDescriptionKey: "Failed to save to Photos."]))
                     }
                 }
             }

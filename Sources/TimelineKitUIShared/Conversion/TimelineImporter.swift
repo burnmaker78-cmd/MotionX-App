@@ -73,10 +73,10 @@ public enum TimelineImporter {
         from urls: [URL],
         canvas: EditorCanvas = EditorCanvas(width: 720, height: 1080, fps: 30),
         imageDuration: Double = 3,
-        productName: String? = "本地剪辑"
+        productName: String? = "Local Edit"
     ) async throws -> EditorTimeline {
         var pool = MaterialsPool()
-        var videoTrack = EditorTrack(kind: .video, label: "视频", zPosition: 0, isMainTrack: true)
+        var videoTrack = EditorTrack(kind: .video, label: "Video", zPosition: 0, isMainTrack: true)
         var cursor: Double = 0
 
         for url in urls {
@@ -117,13 +117,13 @@ public enum TimelineImporter {
 
         // Fixed track IDs so callers can reference by kind
         // videoTrack is always the main track for server-imported timelines.
-        var overlayTrack  = EditorTrack(kind: .overlay,   label: "背景",  zPosition: -1)
-        var videoTrack    = EditorTrack(kind: .video,     label: "视频",  zPosition: 0,  isMainTrack: true)
-        var textTrack     = EditorTrack(kind: .text,      label: "文字",  zPosition: 10)
-        var subtitleTrack = EditorTrack(kind: .subtitle,  label: "字幕",  zPosition: 5)
-        var voiceTrack    = EditorTrack(kind: .audio,     label: "配音",  zPosition: 0)
+        var overlayTrack  = EditorTrack(kind: .overlay,   label: "Background",  zPosition: -1)
+        var videoTrack    = EditorTrack(kind: .video,     label: "Video",  zPosition: 0,  isMainTrack: true)
+        var textTrack     = EditorTrack(kind: .text,      label: "Text",  zPosition: 10)
+        var subtitleTrack = EditorTrack(kind: .subtitle,  label: "Subtitle",  zPosition: 5)
+        var voiceTrack    = EditorTrack(kind: .audio,     label: "Voiceover",  zPosition: 0)
         var bgmTrack      = EditorTrack(kind: .audio,     label: "BGM",   zPosition: 0)
-        var voiceTrack1    = EditorTrack(kind: .audio,     label: "配音1",  zPosition: 0)
+        var voiceTrack1    = EditorTrack(kind: .audio,     label: "Voiceover 1",  zPosition: 0)
 
         var transitions: [EditorTransition] = []
 

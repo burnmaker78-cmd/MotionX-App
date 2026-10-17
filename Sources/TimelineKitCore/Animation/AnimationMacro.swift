@@ -54,7 +54,7 @@ public enum AnimationMacro {
             ]
         case .zoomInSlow:
             // Stronger, perceptible push-in. easeOut so motion is most visible
-            // at the start and settles toward the end — matches 剪映 "轻微推进".
+            // at the start and settles toward the end — matches 剪映 "Gentle Push".
             kf.scale = [
                 Keyframe(time: 0, value: 1.04),
                 Keyframe(time: duration, value: 1.14, easing: ease)

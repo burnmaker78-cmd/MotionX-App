@@ -29,23 +29,23 @@ public enum ImageAnimationPreset: String, CaseIterable, Sendable, Hashable {
 
     public var displayName: String {
         switch self {
-        case .none:           return "无动画"
-        case .slowZoomIn:     return "缓慢放大"
-        case .slowZoomOut:    return "缓慢缩小"
-        case .panLeft:        return "向左平移"
-        case .panRight:       return "向右平移"
-        case .panUp:          return "向上平移"
-        case .panDown:        return "向下平移"
-        case .gentlePush:     return "轻微推进"
-        case .gentlePullBack: return "轻微后退"
-        case .depthPush:      return "景深推进"
-        case .depthPull:      return "景深后退"
-        case .depthPanLeft:   return "景深左移"
-        case .depthPanRight:  return "景深右移"
-        case .depthPanUp:     return "景深上移"
-        case .depthPanDown:   return "景深下移"
-        case .depthOrbitLeft:  return "轻微环绕左"
-        case .depthOrbitRight: return "轻微环绕右"
+        case .none:           return "No Animation"
+        case .slowZoomIn:     return "Slow Zoom In"
+        case .slowZoomOut:    return "Slow Zoom Out"
+        case .panLeft:        return "Pan Left"
+        case .panRight:       return "Pan Right"
+        case .panUp:          return "Pan Up"
+        case .panDown:        return "Pan Down"
+        case .gentlePush:     return "Gentle Push"
+        case .gentlePullBack: return "Gentle Pull Back"
+        case .depthPush:      return "Depth Push"
+        case .depthPull:      return "Depth Pull"
+        case .depthPanLeft:   return "Depth Pan Left"
+        case .depthPanRight:  return "Depth Pan Right"
+        case .depthPanUp:     return "Depth Pan Up"
+        case .depthPanDown:   return "Depth Pan Down"
+        case .depthOrbitLeft:  return "Gentle Orbit Left"
+        case .depthOrbitRight: return "Gentle Orbit Right"
         }
     }
 
@@ -71,13 +71,13 @@ public enum ImageAnimationPreset: String, CaseIterable, Sendable, Hashable {
         }
     }
 
-    /// Presets shown in the "基础动画" tab.
+    /// Presets shown in the "Basic Animation" tab.
     public static let motionPresets: [ImageAnimationPreset] = [
         .none, .slowZoomIn, .slowZoomOut, .panLeft, .panRight, .panUp, .panDown,
         .gentlePush, .gentlePullBack
     ]
 
-    /// Presets shown in the "景深动画" tab.
+    /// Presets shown in the "Depth Animation" tab.
     public static let depthPresets: [ImageAnimationPreset] = [
         .depthPush, .depthPull, .depthPanLeft, .depthPanRight,
         .depthPanUp, .depthPanDown, .depthOrbitLeft, .depthOrbitRight

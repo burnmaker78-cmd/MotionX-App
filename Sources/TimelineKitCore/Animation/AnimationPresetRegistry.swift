@@ -4,9 +4,9 @@ import os.log
 // MARK: - AnimationCategory
 
 public enum AnimationCategory: String, CaseIterable, Sendable {
-    case entrance = "入场"
-    case exit     = "出场"
-    case combo    = "组合"
+    case entrance = "In"
+    case exit     = "Out"
+    case combo    = "Combo"
 }
 
 // MARK: - AnimationPreset Protocol
@@ -81,20 +81,20 @@ public enum AnimationPresetRegistry {
         register(FadeOutPreset())
 
         // Am3: additional entrance presets
-        register(SlideInPreset(presetID: "slideInLeft",  displayName: "向右滑入",
+        register(SlideInPreset(presetID: "slideInLeft",  displayName: "Slide In from Left",
                                iconName: "arrow.right",  direction: .left))
-        register(SlideInPreset(presetID: "slideInRight", displayName: "向左滑入",
+        register(SlideInPreset(presetID: "slideInRight", displayName: "Slide In from Right",
                                iconName: "arrow.left",   direction: .right))
-        register(SlideInPreset(presetID: "slideInUp",    displayName: "向下滑入",
+        register(SlideInPreset(presetID: "slideInUp",    displayName: "Slide In from Top",
                                iconName: "arrow.down",   direction: .up))
-        register(SlideInPreset(presetID: "slideInDown",  displayName: "向上滑入",
+        register(SlideInPreset(presetID: "slideInDown",  displayName: "Slide In from Bottom",
                                iconName: "arrow.up",     direction: .down))
         register(ZoomInAnimPreset())
 
         // Am3: exit presets
-        register(SlideOutPreset(presetID: "slideOutLeft",  displayName: "向右退出",
+        register(SlideOutPreset(presetID: "slideOutLeft",  displayName: "Slide Out to Right",
                                 iconName: "arrow.right",   direction: .left))
-        register(SlideOutPreset(presetID: "slideOutRight", displayName: "向左退出",
+        register(SlideOutPreset(presetID: "slideOutRight", displayName: "Slide Out to Left",
                                 iconName: "arrow.left",    direction: .right))
         register(ZoomOutAnimPreset())
 
@@ -122,7 +122,7 @@ public enum AnimationPresetRegistry {
 /// progress 0 = transparent, progress 1 = fully visible.
 struct FadeInPreset: AnimationPreset {
     let presetID    = "fadeIn"
-    let displayName = "渐显"
+    let displayName = "Fade In"
     let category    = AnimationCategory.entrance
     let iconName    = "sun.min"
 
@@ -140,7 +140,7 @@ struct FadeInPreset: AnimationPreset {
 /// progress 0 = fully visible, progress 1 = transparent.
 struct FadeOutPreset: AnimationPreset {
     let presetID    = "fadeOut"
-    let displayName = "渐隐"
+    let displayName = "Fade Out"
     let category    = AnimationCategory.exit
     let iconName    = "sun.max"
 
@@ -217,7 +217,7 @@ struct SlideOutPreset: AnimationPreset {
 /// progress 0 = scale 0.85 + transparent, progress 1 = scale 1.0 + fully visible.
 struct ZoomInAnimPreset: AnimationPreset {
     let presetID    = "zoomIn"
-    let displayName = "放大"
+    let displayName = "Zoom In"
     let category    = AnimationCategory.entrance
     let iconName    = "arrow.up.left.and.arrow.down.right"
 
@@ -244,7 +244,7 @@ struct ZoomInAnimPreset: AnimationPreset {
 /// Clip exits by scaling from 100% to 85% while fading out.
 struct ZoomOutAnimPreset: AnimationPreset {
     let presetID    = "zoomOut"
-    let displayName = "缩小"
+    let displayName = "Zoom Out"
     let category    = AnimationCategory.exit
     let iconName    = "arrow.down.right.and.arrow.up.left"
 
@@ -271,7 +271,7 @@ struct ZoomOutAnimPreset: AnimationPreset {
 /// Full-clip slow zoom in (1.0 → 1.12). Mirrors Ken Burns `slowZoomIn` semantic.
 struct SlowZoomComboPreset: AnimationPreset {
     let presetID    = "slowZoom"
-    let displayName = "缓慢放大"
+    let displayName = "Slow Zoom In"
     let category    = AnimationCategory.combo
     let iconName    = "plus.magnifyingglass"
 
@@ -292,7 +292,7 @@ struct SlowZoomComboPreset: AnimationPreset {
 /// Full-clip horizontal drift (pan right 3%) with slight zoom.
 struct DriftComboPreset: AnimationPreset {
     let presetID    = "drift"
-    let displayName = "漂移"
+    let displayName = "Drift"
     let category    = AnimationCategory.combo
     let iconName    = "arrow.right"
 
@@ -315,7 +315,7 @@ struct DriftComboPreset: AnimationPreset {
 /// Full-clip vertical float (gentle sinusoidal vertical bob).
 struct FloatComboPreset: AnimationPreset {
     let presetID    = "float"
-    let displayName = "漂浮"
+    let displayName = "Float"
     let category    = AnimationCategory.combo
     let iconName    = "waveform"
 
@@ -332,7 +332,7 @@ struct FloatComboPreset: AnimationPreset {
 /// Full-clip slow zoom out (1.12 → 1.0). Mirrors Ken Burns `slowZoomOut` semantic.
 struct SlowZoomOutComboPreset: AnimationPreset {
     let presetID    = "slowZoomOut"
-    let displayName = "缓慢缩小"
+    let displayName = "Slow Zoom Out"
     let category    = AnimationCategory.combo
     let iconName    = "minus.magnifyingglass"
 
@@ -353,7 +353,7 @@ struct SlowZoomOutComboPreset: AnimationPreset {
 /// Full-clip pan left: start with 6% overscan, drift content to the left.
 struct PanLeftComboPreset: AnimationPreset {
     let presetID    = "panLeft"
-    let displayName = "向左平移"
+    let displayName = "Pan Left"
     let category    = AnimationCategory.combo
     let iconName    = "arrow.left"
 
@@ -376,7 +376,7 @@ struct PanLeftComboPreset: AnimationPreset {
 /// Full-clip pan right: start with 6% overscan, drift content to the right.
 struct PanRightComboPreset: AnimationPreset {
     let presetID    = "panRight"
-    let displayName = "向右平移"
+    let displayName = "Pan Right"
     let category    = AnimationCategory.combo
     let iconName    = "arrow.right"
 
@@ -399,7 +399,7 @@ struct PanRightComboPreset: AnimationPreset {
 /// Depth-sim dolly forward: scale 1.0 → 1.22 (stronger than slowZoomIn).
 struct DepthPushComboPreset: AnimationPreset {
     let presetID    = "depthPush"
-    let displayName = "景深推进"
+    let displayName = "Depth Push"
     let category    = AnimationCategory.combo
     let iconName    = "arrow.up.forward.circle"
 
@@ -420,7 +420,7 @@ struct DepthPushComboPreset: AnimationPreset {
 /// Depth-sim dolly backward: scale 1.22 → 1.0 (camera pulls away).
 struct DepthPullComboPreset: AnimationPreset {
     let presetID    = "depthPull"
-    let displayName = "景深后退"
+    let displayName = "Depth Pull"
     let category    = AnimationCategory.combo
     let iconName    = "arrow.down.backward.circle"
 
@@ -441,7 +441,7 @@ struct DepthPullComboPreset: AnimationPreset {
 /// Depth-sim lateral pan left: deeper pan offset + counter-zoom.
 struct DepthPanLeftComboPreset: AnimationPreset {
     let presetID    = "depthPanLeft"
-    let displayName = "景深左移"
+    let displayName = "Depth Pan Left"
     let category    = AnimationCategory.combo
     let iconName    = "arrow.left.circle"
 
@@ -464,7 +464,7 @@ struct DepthPanLeftComboPreset: AnimationPreset {
 /// Depth-sim lateral pan right.
 struct DepthPanRightComboPreset: AnimationPreset {
     let presetID    = "depthPanRight"
-    let displayName = "景深右移"
+    let displayName = "Depth Pan Right"
     let category    = AnimationCategory.combo
     let iconName    = "arrow.right.circle"
 
@@ -487,7 +487,7 @@ struct DepthPanRightComboPreset: AnimationPreset {
 /// Orbit left: pan left while zooming in — "arc around subject" parallax feel.
 struct DepthOrbitLeftComboPreset: AnimationPreset {
     let presetID    = "depthOrbitLeft"
-    let displayName = "环绕左"
+    let displayName = "Orbit Left"
     let category    = AnimationCategory.combo
     let iconName    = "arrow.counterclockwise"
 
@@ -510,7 +510,7 @@ struct DepthOrbitLeftComboPreset: AnimationPreset {
 /// Orbit right: pan right while zooming in.
 struct DepthOrbitRightComboPreset: AnimationPreset {
     let presetID    = "depthOrbitRight"
-    let displayName = "环绕右"
+    let displayName = "Orbit Right"
     let category    = AnimationCategory.combo
     let iconName    = "arrow.clockwise"
 

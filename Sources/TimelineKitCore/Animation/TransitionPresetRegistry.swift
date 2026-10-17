@@ -5,11 +5,11 @@ import CoreMedia
 // MARK: - TransitionCategory
 
 public enum TransitionCategory: String, CaseIterable, Sendable {
-    case basic      = "基础"
-    case motion     = "移动"
-    case zoom       = "缩放"
-    case blur       = "模糊"
-    case stylized   = "风格化"   // reserved — V7 P2+
+    case basic      = "Basic"
+    case motion     = "Movement"
+    case zoom       = "Zoom"
+    case blur       = "Blur"
+    case stylized   = "Stylized"   // reserved — V7 P2+
 }
 
 // MARK: - TransitionPreset protocol
@@ -83,10 +83,10 @@ public enum TransitionPresetRegistry {
         register(CrossFadePreset())
         register(FadeThroughBlackPreset())
         // 移动
-        register(SlidePreset(presetID: "slideLeft",  displayName: "左移",    iconName: "arrow.left",         direction: .left))
-        register(SlidePreset(presetID: "slideRight", displayName: "右移",    iconName: "arrow.right",        direction: .right))
-        register(PushPreset (presetID: "pushLeft",   displayName: "推进·左", iconName: "arrow.left.to.line", direction: .left))
-        register(PushPreset (presetID: "pushRight",  displayName: "推进·右", iconName: "arrow.right.to.line",direction: .right))
+        register(SlidePreset(presetID: "slideLeft",  displayName: "Move Left",    iconName: "arrow.left",         direction: .left))
+        register(SlidePreset(presetID: "slideRight", displayName: "Move Right",    iconName: "arrow.right",        direction: .right))
+        register(PushPreset (presetID: "pushLeft",   displayName: "Push Left", iconName: "arrow.left.to.line", direction: .left))
+        register(PushPreset (presetID: "pushRight",  displayName: "Push Right", iconName: "arrow.right.to.line",direction: .right))
         // 缩放
         register(ZoomInPreset())
         // 模糊
@@ -126,7 +126,7 @@ public enum TransitionPresetRegistry {
 /// Standard dissolve: outgoing fades out while incoming fades in simultaneously.
 struct CrossFadePreset: TransitionPreset {
     let presetID    = "crossFade"
-    let displayName = "叠化"
+    let displayName = "Crossfade"
     let category    = TransitionCategory.basic
     let iconName    = "circle.lefthalf.filled"
 
@@ -146,7 +146,7 @@ struct CrossFadePreset: TransitionPreset {
 /// Outgoing dissolves to black (first half), then black dissolves to incoming (second half).
 struct FadeThroughBlackPreset: TransitionPreset {
     let presetID    = "fadeThroughBlack"
-    let displayName = "闪黑"
+    let displayName = "Fade Through Black"
     let category    = TransitionCategory.basic
     let iconName    = "moon.fill"
 
@@ -241,7 +241,7 @@ struct PushPreset: TransitionPreset {
 /// Outgoing frame zooms out (1.0→1.3 scale) while fading; incoming fades in at normal scale.
 struct ZoomInPreset: TransitionPreset {
     let presetID    = "zoomIn"
-    let displayName = "放大"
+    let displayName = "Zoom In"
     let category    = TransitionCategory.zoom
     let iconName    = "plus.magnifyingglass"
 
@@ -281,7 +281,7 @@ struct ZoomInPreset: TransitionPreset {
 /// Outgoing blurs out (radius 0→12) while fading; incoming fades in sharp.
 struct BlurFadePreset: TransitionPreset {
     let presetID    = "blurFade"
-    let displayName = "模糊叠化"
+    let displayName = "Blur Crossfade"
     let category    = TransitionCategory.blur
     let iconName    = "camera.filters"
 

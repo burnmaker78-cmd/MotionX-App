@@ -104,7 +104,7 @@ public struct FullScreenPreviewView: View {
                 .background(Color.black.opacity(0.5))
                 .clipShape(Circle())
         }
-        .accessibilityLabel("退出全屏")
+        .accessibilityLabel("Exit Full Screen")
     }
 
     private var controlBar: some View {
@@ -160,7 +160,7 @@ public struct FullScreenPreviewView: View {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .font(.system(size: 28))
                         .foregroundStyle(.yellow)
-                    Text("预览构建失败")
+                    Text("Failed to build preview.")
                         .font(.headline)
                         .foregroundStyle(.white)
                     Text(err)
@@ -172,7 +172,7 @@ public struct FullScreenPreviewView: View {
                     ProgressView()
                         .tint(.white)
                         .scaleEffect(1.2)
-                    Text("正在生成同源预览…")
+                    Text("Generating preview…")
                         .font(.caption)
                         .foregroundStyle(.white.opacity(0.8))
                 }

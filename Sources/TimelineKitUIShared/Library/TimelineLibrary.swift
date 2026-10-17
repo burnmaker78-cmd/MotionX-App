@@ -310,7 +310,7 @@ public struct TimelineLibrary: Sendable {
     /// 把 timeline 保存为库内项目（无名称包装；保留旧签名兼容）。
     @discardableResult
     public func saveProject(_ timeline: EditorTimeline, projectID: UUID = UUID()) throws -> UUID {
-        try saveProject(LibraryProject(id: projectID, name: "未命名项目", timeline: timeline))
+        try saveProject(LibraryProject(id: projectID, name: "Untitled Project", timeline: timeline))
     }
 
     /// 加载库内某项目（兼容旧 `.tlkproj`：纯 EditorTimeline 时回退名称）。
@@ -452,7 +452,7 @@ public struct TimelineLibrary: Sendable {
         var copy = source
         copy = LibraryProject(
             id: UUID(),
-            name: source.name + " 副本",
+            name: source.name + " Copy",
             createdAt: Date(),
             timeline: source.timeline,
             isPinned: false
@@ -513,9 +513,9 @@ public enum TimelineLibraryError: Error, LocalizedError {
 
     public var errorDescription: String? {
         switch self {
-        case .notABundle(let url): return "\(url.lastPathComponent) 不是有效的资源库"
-        case .sourceMissing: return "源素材不存在"
-        case .corruptProject(let id): return "项目 \(id) 无法解析"
+        case .notABundle(let url): return "\(url.lastPathComponent) is not a valid media library."
+        case .sourceMissing: return "Source media does not exist."
+        case .corruptProject(let id): return "Unable to load project \(id)."
         }
     }
 }

@@ -70,7 +70,7 @@ public final class TimelineLibraryStore {
     @discardableResult
     public func addMedia(urls: [URL]) async -> [URL] {
         guard let library else {
-            errorMessage = "请先创建或打开资源库"
+            errorMessage = "Please create or open a media library first."
             return []
         }
         var imported: [URL] = []
@@ -81,7 +81,7 @@ public final class TimelineLibraryStore {
                 let entry = try await library.importMediaEntry(from: url)
                 imported.append(library.mediaFileURL(for: entry))
             } catch {
-                errorMessage = "导入失败：\(url.lastPathComponent) — \(error.localizedDescription)"
+                errorMessage = "Import failed: \(url.lastPathComponent) — \(error.localizedDescription)"
             }
         }
         if !imported.isEmpty { refreshMedia() }
@@ -149,7 +149,7 @@ public final class TimelineLibraryStore {
         let canvas = EditorCanvas(width: 1920, height: 1080, fps: 30)
         var timeline = EditorTimeline(canvas: canvas)
         if !timeline.tracks.contains(where: { $0.isMainTrack }) {
-            timeline.tracks.append(EditorTrack(id: UUID(), kind: .video, label: "视频", zPosition: 0, segments: [], isMainTrack: true))
+            timeline.tracks.append(EditorTrack(id: UUID(), kind: .video, label: "Video", zPosition: 0, segments: [], isMainTrack: true))
         }
         let project = LibraryProject(name: name, timeline: timeline)
         try library.saveProject(project)

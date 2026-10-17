@@ -7,7 +7,7 @@ import TimelineKitUIShared
 
 /// V4 unified interaction spec: quick-action bar shown when an audio segment is
 /// selected via track tap. Keeps剪辑 operations accessible without blocking the
-/// timeline. The full AudioEditPanel is opened by tapping "编辑音频".
+/// timeline. The full AudioEditPanel is opened by tapping "Edit Audio".
 struct AudioSegmentActionPanel: View {
 
     let segmentID: UUID
@@ -31,23 +31,23 @@ struct AudioSegmentActionPanel: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 20) {
                 // 编辑音频 → opens full AudioEditPanel
-                panelItem("编辑音频", icon: "waveform", enabled: true) {
+                panelItem("Edit Audio", icon: "waveform", enabled: true) {
                     store.selection.editingSegmentID = segmentID
                 }
 
                 // 分割
-                panelItem("分割", icon: "scissors.badge.ellipsis", enabled: !trackIsLocked) {
+                panelItem("Split", icon: "scissors.badge.ellipsis", enabled: !trackIsLocked) {
                     store.splitSegment(id: segmentID, at: store.selection.playheadTime)
                 }
 
                 // 删除
-                panelItem("删除", icon: "trash", enabled: !trackIsLocked) {
+                panelItem("Delete", icon: "trash", enabled: !trackIsLocked) {
                     store.deleteSegment(id: segmentID)
                 }
 
                 // 静音 / 取消静音
                 panelItem(
-                    isMuted ? "取消静音" : "静音",
+                    isMuted ? "Unmute" : "Mute",
                     icon: isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill",
                     enabled: true
                 ) {
@@ -55,7 +55,7 @@ struct AudioSegmentActionPanel: View {
                 }
 
                 // 调速
-                panelItem("调速", icon: "gauge.with.needle", enabled: false) {}
+                panelItem("Speed", icon: "gauge.with.needle", enabled: false) {}
 
                 if let onDismiss {
                     Button(action: onDismiss) {

@@ -284,7 +284,7 @@ public struct ClipEditorView: View {
                 }
             }
             ToolbarItem(placement: .title) {
-                Text(store.timeline.metadata.productName ?? "剪辑")
+                Text(store.timeline.metadata.productName ?? "Edit")
                     .foregroundColor(.white)
             }
         }
@@ -357,7 +357,7 @@ public struct ClipEditorView: View {
     /// DraftStore 快速恢复通道仍然有效。
     private func persistActiveProject() {
         guard let id = activeProjectID else { return }
-        var project = LibraryProject(id: id, name: "未命名项目", timeline: store.timeline)
+        var project = LibraryProject(id: id, name: "Untitled Project", timeline: store.timeline)
         if let existing = libraryStore.projects.first(where: { $0.id == id }) {
             project.name = existing.name
         }
@@ -392,27 +392,42 @@ public struct ClipEditorView: View {
                 let segID = store.selection.singleSelectedID,
                 let seg = store.timeline.segment(id: segID),
                 (seg.isText || seg.isSubtitle) {
-            TextSegmentActionPanel(segmentID: segID, store: store, onDismiss: { activeToolCategory = nil })
+            TextSegmentActionPanel(segmentID: segID, store: store, onDismiss: {
+                    activeToolCategory = nil
+                    store.selection.deselect()
+                })
                 .transition(.move(edge: .bottom).combined(with: .opacity))
         } else if activeToolCategory == .clip,
                 let segID = store.selection.singleSelectedID,
                 store.timeline.mainTrack?.segment(id: segID) != nil {
-            SegmentReplacePanel(segmentID: segID, store: store, onDismiss: { activeToolCategory = nil })
+            SegmentReplacePanel(segmentID: segID, store: store, onDismiss: {
+                    activeToolCategory = nil
+                    store.selection.deselect()
+                })
                 .transition(.move(edge: .bottom).combined(with: .opacity))
         } else if activeToolCategory == .adjust,
                   let segID = store.selection.singleSelectedID,
                   store.timeline.mainTrack?.segment(id: segID) != nil {
-            ColorAdjustmentPanel(segmentID: segID, store: store, onDismiss: { activeToolCategory = nil })
+            ColorAdjustmentPanel(segmentID: segID, store: store, onDismiss: {
+                    activeToolCategory = nil
+                    store.selection.deselect()
+                })
                 .transition(.move(edge: .bottom).combined(with: .opacity))
         } else if activeToolCategory == .animation,
                   let segID = store.selection.singleSelectedID,
                   store.timeline.mainTrack?.segment(id: segID) != nil {
-            AnimationPickerSheet(segmentID: segID, store: store, onDismiss: { activeToolCategory = nil })
+            AnimationPickerSheet(segmentID: segID, store: store, onDismiss: {
+                    activeToolCategory = nil
+                    store.selection.deselect()
+                })
                 .transition(.move(edge: .bottom).combined(with: .opacity))
         } else if activeToolCategory == .audio,
                   let segID = store.selection.singleSelectedID,
                   store.timeline.segment(id: segID)?.isAudio == true {
-            AudioSegmentActionPanel(segmentID: segID, store: store, onDismiss: { activeToolCategory = nil })
+            AudioSegmentActionPanel(segmentID: segID, store: store, onDismiss: {
+                    activeToolCategory = nil
+                    store.selection.deselect()
+                })
                 .transition(.move(edge: .bottom).combined(with: .opacity))
         }
         // ── Priority 3: Category default panels ────────────────────────────
@@ -430,7 +445,10 @@ public struct ClipEditorView: View {
             )
                 .transition(.move(edge: .bottom).combined(with: .opacity))
         } else if let category = activeToolCategory {
-            EditorSecondaryToolPanel(category: category, store: store, onDismiss: { activeToolCategory = nil })
+            EditorSecondaryToolPanel(category: category, store: store, onDismiss: {
+                    activeToolCategory = nil
+                    store.selection.deselect()
+                })
                 .transition(.move(edge: .bottom).combined(with: .opacity))
         }
     }
@@ -526,7 +544,7 @@ public struct ClipEditorView: View {
     }
 
     private var exportButton: some View {
-        Button("导出") {
+        Button("Export") {
             store.pause()
             showExport = true
         }
@@ -550,7 +568,7 @@ public struct ClipEditorView: View {
                 .background(Color.white.opacity(0.15))
                 .cornerRadius(6)
         }
-        .accessibilityLabel("导出规格：\(store.timeline.effectiveExportConfig.resolution.label)")
+        .accessibilityLabel("Export settings: \(store.timeline.effectiveExportConfig.resolution.label)")
     }
 }
 

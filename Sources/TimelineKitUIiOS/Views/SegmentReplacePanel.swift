@@ -8,7 +8,7 @@ import TimelineKitUIShared
 // MARK: - SegmentReplacePanel
 
 /// Secondary panel shown under the `.clip` toolbar category when a main-track
-/// segment is selected.  Currently exposes "分割" (stub) and "替换素材".
+/// segment is selected.  Currently exposes "Split" (stub) and "Replace Media".
 struct SegmentReplacePanel: View {
 
     let segmentID: UUID
@@ -26,7 +26,13 @@ struct SegmentReplacePanel: View {
     /// True when the selected segment is an image (not a video).
     /// True when the source video segment has its original audio muted — which is
     /// also the "已分离过" signal (we set isMuted on detach). Drives the disabled
-    /// state of the "分离音视频" button per §9.2.
+    /// state of the "Detach Audio" button per §9.2.
+    private var isVideoSegment: Bool {
+        guard let seg = store.timeline.segment(id: segmentID) else { return false }
+        if case .video = seg.content { return true }
+        return false
+    }
+
     private var isVideoAudioMuted: Bool {
         guard let seg = store.timeline.segment(id: segmentID),
               case .video(let c) = seg.content else { return false }
@@ -37,46 +43,46 @@ struct SegmentReplacePanel: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 20) {
                 // 分割
-                panelItem("分割", icon: "scissors.badge.ellipsis") {
+                panelItem("Split", icon: "scissors.badge.ellipsis") {
                     store.splitSegment(id: segmentID, at: store.selection.playheadTime)
                 }
 
                 // 删除
-                panelItem("删除", icon: "trash") {
+                panelItem("Delete", icon: "trash") {
                     store.deleteSegment(id: segmentID)
                 }
 
                 // 替换素材
-                panelItem("替换素材", icon: "arrow.triangle.2.circlepath") {
+                panelItem("Replace Media", icon: "arrow.triangle.2.circlepath") {
                     showPicker = true
                 }
 
-                // v3 P2 (audio-feature-spec §9): detach audio.
-                panelItem(
-                    "分离音视频",
-                    icon: "waveform.path.badge.minus",
-                    enabled: !isVideoAudioMuted && !isDetachingAudio
-                ) {
-                    Task { await runDetachAudio() }
-                }
-
-                // v3 P3 (audio-feature-spec §11): toggle the segment's native audio.
-                // Icon flips on/off; tap immediately commits via setVideoMuted.
-                panelItem(
-                    isVideoAudioMuted ? "原音 关" : "原音 开",
-                    icon: isVideoAudioMuted ? "speaker.slash.fill" : "speaker.wave.2.fill"
-                ) {
-                    store.setVideoMuted(segmentID: segmentID, isMuted: !isVideoAudioMuted)
-                }
-
-                if isDetachingAudio {
-                    HStack(spacing: 8) {
-                        ProgressView().controlSize(.small).tint(.white)
-                        Text("分离中…")
-                            .font(.system(size: 11))
-                            .foregroundStyle(Color.white.opacity(0.75))
+                // Audio controls apply only to video clips. Images have no source audio.
+                if isVideoSegment {
+                    panelItem(
+                        "Detach Audio",
+                        icon: "waveform.path.badge.minus",
+                        enabled: !isVideoAudioMuted && !isDetachingAudio
+                    ) {
+                        Task { await runDetachAudio() }
                     }
-                    .padding(.leading, 4)
+
+                    panelItem(
+                        isVideoAudioMuted ? "Original Audio Off" : "Original Audio On",
+                        icon: isVideoAudioMuted ? "speaker.slash.fill" : "speaker.wave.2.fill"
+                    ) {
+                        store.setVideoMuted(segmentID: segmentID, isMuted: !isVideoAudioMuted)
+                    }
+
+                    if isDetachingAudio {
+                        HStack(spacing: 8) {
+                            ProgressView().controlSize(.small).tint(.white)
+                            Text("Detaching audio…")
+                                .font(.system(size: 11))
+                                .foregroundStyle(Color.white.opacity(0.75))
+                        }
+                        .padding(.leading, 4)
+                    }
                 }
 
                 if let onDismiss {
@@ -98,14 +104,14 @@ struct SegmentReplacePanel: View {
             Divider().background(Color.white.opacity(0.08))
         }
         .alert(
-            "分离音视频失败",
+            "Unable to Detach Audio",
             isPresented: Binding(
                 get: { detachErrorMessage != nil },
                 set: { if !$0 { detachErrorMessage = nil } }
             ),
             presenting: detachErrorMessage
         ) { _ in
-            Button("确定") { detachErrorMessage = nil }
+            Button("OK") { detachErrorMessage = nil }
         } message: { msg in
             Text(msg)
         }
@@ -133,10 +139,10 @@ struct SegmentReplacePanel: View {
                 )
             }
         }
-        .alert("素材时长不足", isPresented: $showInsufficientDurationAlert) {
-            Button("好") { }
+        .alert("Media Is Too Short", isPresented: $showInsufficientDurationAlert) {
+            Button("OK") { }
         } message: {
-            Text("请选择更长的视频素材")
+            Text("Please choose a longer video clip.")
         }
     }
 
@@ -175,9 +181,9 @@ struct SegmentReplacePanel: View {
         do {
             _ = try await store.detachAudio(fromVideoSegmentID: segmentID)
         } catch let err as AudioExtractor.Failure {
-            await MainActor.run { detachErrorMessage = err.errorDescription ?? "提取失败" }
+            await MainActor.run { detachErrorMessage = err.errorDescription ?? "Extraction Failed" }
         } catch let err as EditorStore.DetachAudioError {
-            await MainActor.run { detachErrorMessage = err.errorDescription ?? "分离失败" }
+            await MainActor.run { detachErrorMessage = err.errorDescription ?? "Detachment Failed" }
         } catch {
             await MainActor.run { detachErrorMessage = error.localizedDescription }
         }

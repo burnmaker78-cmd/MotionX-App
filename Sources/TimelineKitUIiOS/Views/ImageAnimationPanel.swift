@@ -6,7 +6,7 @@ import TimelineKitUIShared
 // MARK: - ImageAnimationPanel
 
 /// Bottom sheet for choosing a Ken Burns / depth animation template on an image segment.
-/// Shown when the user taps "动画" in the clip edit panel for an image segment.
+/// Shown when the user taps "Animation" in the clip edit panel for an image segment.
 struct ImageAnimationPanel: View {
 
     let segmentID: UUID
@@ -33,8 +33,8 @@ struct ImageAnimationPanel: View {
     // MARK: - Tab bar
 
     private enum Tab: String, CaseIterable {
-        case motion = "基础动画"
-        case depth  = "景深动画"
+        case motion = "Basic Animation"
+        case depth  = "Depth Animation"
     }
 
     private var tabBar: some View {

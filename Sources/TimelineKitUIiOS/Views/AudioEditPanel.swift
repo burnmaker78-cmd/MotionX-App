@@ -43,7 +43,7 @@ struct AudioEditPanel: View {
     private var assetName: String {
         guard let mid = segment?.materialID,
               let asset = store.timeline.materials[mid],
-              let url = asset.localURL ?? asset.remoteURL else { return "音频片段" }
+              let url = asset.localURL ?? asset.remoteURL else { return "Audio Clip" }
         return url.lastPathComponent
     }
 
@@ -118,7 +118,7 @@ struct AudioEditPanel: View {
     private var volumeRow: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
-                Text("音量")
+                Text("Volume")
                     .font(.system(size: 11))
                     .foregroundStyle(Color.white.opacity(0.7))
                 Spacer()
@@ -152,7 +152,7 @@ struct AudioEditPanel: View {
         let range = EditorStore.audioSpeedRange
         return VStack(alignment: .leading, spacing: 4) {
             HStack {
-                Text("速度")
+                Text("Speed")
                     .font(.system(size: 11))
                     .foregroundStyle(Color.white.opacity(0.7))
                 Spacer()
@@ -189,7 +189,7 @@ struct AudioEditPanel: View {
             HStack(spacing: 6) {
                 Image(systemName: isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
                     .font(.system(size: 12))
-                Text(isMuted ? "已静音" : "静音此片段")
+                Text(isMuted ? "Muted" : "Mute This Clip")
                     .font(.system(size: 12))
             }
             .foregroundStyle(.white)
@@ -208,13 +208,13 @@ struct AudioEditPanel: View {
     private var fadeRow: some View {
         let maxFade = min(2.0, durationSecs / 2)
         return VStack(alignment: .leading, spacing: 10) {
-            Text("淡化")
+            Text("Fade")
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(Color.white.opacity(0.5))
 
-            fadeSliderRow(label: "淡入", value: $localFadeIn, range: 0...maxFade,
+            fadeSliderRow(label: "Fade In", value: $localFadeIn, range: 0...maxFade,
                           onEditingChanged: onFadeDragChanged)
-            fadeSliderRow(label: "淡出", value: $localFadeOut, range: 0...maxFade,
+            fadeSliderRow(label: "Fade Out", value: $localFadeOut, range: 0...maxFade,
                           onEditingChanged: onFadeDragChanged)
         }
     }

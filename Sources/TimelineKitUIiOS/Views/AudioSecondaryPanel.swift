@@ -71,14 +71,14 @@ struct AudioSecondaryPanel: View {
             }
         }
         .alert(
-            "音频处理失败",
+            "Audio Processing Failed",
             isPresented: Binding(
                 get: { errorMessage != nil },
                 set: { if !$0 { errorMessage = nil } }
             ),
             presenting: errorMessage
         ) { _ in
-            Button("确定") { errorMessage = nil }
+            Button("OK") { errorMessage = nil }
         } message: { msg in
             Text(msg)
         }
@@ -91,19 +91,19 @@ struct AudioSecondaryPanel: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 20) {
                 toolButton(
-                    "提取音频",
+                    "Extract Audio",
                     icon: "waveform.path.badge.minus",
                     enabled: task == .idle
                 ) { showVideoPicker = true }
 
                 toolButton(
-                    "本地音乐",
+                    "Local Music",
                     icon: "music.note.list",
                     enabled: task == .idle
                 ) { showAudioImporter = true }
 
                 toolButton(
-                    "音效",
+                    "Sound Effects",
                     icon: "speaker.wave.2.bubble",
                     enabled: false
                 ) {}
@@ -137,12 +137,12 @@ struct AudioSecondaryPanel: View {
 
     private func handleVideoExtraction(item: PhotosPickerItem) async {
         defer { Task { @MainActor in videoPickerItem = nil } }
-        await MainActor.run { task = .processing("提取音频中…") }
+        await MainActor.run { task = .processing("Extracting audio…") }
 
         guard let movie = try? await item.loadTransferable(type: VideoTransferable.self) else {
             await MainActor.run {
                 task = .idle
-                errorMessage = "无法读取视频文件"
+                errorMessage = "Unable to read the video file."
             }
             return
         }
@@ -159,7 +159,7 @@ struct AudioSecondaryPanel: View {
         } catch {
             await MainActor.run {
                 task = .idle
-                errorMessage = "无法分配输出路径：\(error.localizedDescription)"
+                errorMessage = "Unable to create an output path: \(error.localizedDescription)"
             }
             return
         }
@@ -183,7 +183,7 @@ struct AudioSecondaryPanel: View {
         } catch let err as AudioExtractor.Failure {
             await MainActor.run {
                 task = .idle
-                errorMessage = err.errorDescription ?? "提取失败"
+                errorMessage = err.errorDescription ?? "Extraction Failed"
             }
         } catch {
             await MainActor.run {
@@ -194,7 +194,7 @@ struct AudioSecondaryPanel: View {
     }
 
     private func handleAudioImport(pickedURL: URL) async {
-        await MainActor.run { task = .processing("导入音乐中…") }
+        await MainActor.run { task = .processing("Importing music…") }
 
         let scoped = pickedURL.startAccessingSecurityScopedResource()
         defer { if scoped { pickedURL.stopAccessingSecurityScopedResource() } }
@@ -212,7 +212,7 @@ struct AudioSecondaryPanel: View {
         } catch {
             await MainActor.run {
                 task = .idle
-                errorMessage = "无法分配输出路径：\(error.localizedDescription)"
+                errorMessage = "Unable to create an output path: \(error.localizedDescription)"
             }
             return
         }
@@ -236,7 +236,7 @@ struct AudioSecondaryPanel: View {
         } catch let err as AudioImporter.Failure {
             await MainActor.run {
                 task = .idle
-                errorMessage = err.errorDescription ?? "导入失败"
+                errorMessage = err.errorDescription ?? "Import Failed"
             }
         } catch {
             await MainActor.run {

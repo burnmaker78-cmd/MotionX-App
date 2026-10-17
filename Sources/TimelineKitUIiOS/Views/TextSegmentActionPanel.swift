@@ -6,7 +6,7 @@ import TimelineKitUIShared
 
 /// V4 unified interaction spec: quick-action bar shown when a text or subtitle
 /// segment is selected via track tap. The full TextEditPanel is opened by
-/// tapping "样式".
+/// tapping "Style".
 struct TextSegmentActionPanel: View {
 
     let segmentID: UUID
@@ -48,26 +48,26 @@ struct TextSegmentActionPanel: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 20) {
                 // 样式 → opens full TextEditPanel
-                panelItem("样式", icon: "textformat", enabled: true) {
+                panelItem("Style", icon: "textformat", enabled: true) {
                     store.selection.editingSegmentID = segmentID
                 }
 
                 // v4 (text-typography-spec §4.3): copy/paste style
-                panelItem("复制样式", icon: "doc.on.clipboard", enabled: isTextOrSubtitle) {
+                panelItem("Copy Style", icon: "doc.on.clipboard", enabled: isTextOrSubtitle) {
                     store.copyStyle(segmentID: segmentID)
-                    ToastContext.shared.show("已复制样式", icon: "doc.on.clipboard",
+                    ToastContext.shared.show("Style Copied", icon: "doc.on.clipboard",
                         style: .success, duration: 1.5, position: .top)
                 }
 
-                panelItem("粘贴样式", icon: "arrow.turn.down.right", enabled: store.canPasteStyle(toSegmentID: segmentID)) {
+                panelItem("Paste Style", icon: "arrow.turn.down.right", enabled: store.canPasteStyle(toSegmentID: segmentID)) {
                     store.pasteStyle(segmentID: segmentID)
-                    ToastContext.shared.show("已粘贴样式", icon: "arrow.turn.down.right",
+                    ToastContext.shared.show("Style Pasted", icon: "arrow.turn.down.right",
                         style: .success, duration: 1.5, position: .top)
                 }
 
                 // v4 (bulk-style-apply-spec §4.1): 应用到本轨同类
                 panelItem(
-                    "应用到本轨同类",
+                    "Apply to Similar Clips on Track",
                     icon: "doc.on.doc",
                     enabled: bulkTargetCount > 0 && !trackIsLocked
                 ) {
@@ -75,17 +75,17 @@ struct TextSegmentActionPanel: View {
                 }
 
                 // 文本朗读 → only for subtitle segments
-                panelItem("文本朗读", icon: "speaker.wave.2", enabled: isSubtitle) {
+                panelItem("Text to Speech", icon: "speaker.wave.2", enabled: isSubtitle) {
                     store.ttsConfigSheetTargets = [segmentID]
                 }
 
                 // 分割
-                panelItem("分割", icon: "scissors.badge.ellipsis", enabled: !trackIsLocked) {
+                panelItem("Split", icon: "scissors.badge.ellipsis", enabled: !trackIsLocked) {
                     store.splitSegment(id: segmentID, at: store.selection.playheadTime)
                 }
 
                 // 删除
-                panelItem("删除", icon: "trash", enabled: !trackIsLocked) {
+                panelItem("Delete", icon: "trash", enabled: !trackIsLocked) {
                     store.deleteSegment(id: segmentID)
                 }
 
@@ -108,11 +108,11 @@ struct TextSegmentActionPanel: View {
             Divider().background(Color.white.opacity(0.08))
         }
         // v4 (bulk-style-apply-spec §2.5): two-step confirmation.
-        .alert("应用到本轨同类", isPresented: $showBulkConfirm) {
-            Button("取消", role: .cancel) {}
-            Button("确认应用") { performBulkApply() }
+        .alert("Apply to Similar Clips on Track", isPresented: $showBulkConfirm) {
+            Button("Cancel", role: .cancel) {}
+            Button("Apply") { performBulkApply() }
         } message: {
-            Text("将当前样式应用到本条轨道的其他 \(bulkTargetCount) 个同类片段。此操作可撤销。")
+            Text("Apply the current style to the other \(bulkTargetCount) similar clips on this track. This can be undone.")
         }
     }
 
@@ -125,7 +125,7 @@ struct TextSegmentActionPanel: View {
         )
         if count > 0 {
             ToastContext.shared.show(
-                "已应用到 \(count) 个片段",
+                "Applied to \(count) clips",
                 icon: "checkmark.circle",
                 style: .success,
                 duration: 2.0,

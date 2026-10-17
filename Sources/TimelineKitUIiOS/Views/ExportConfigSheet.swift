@@ -10,7 +10,7 @@ import TimelineKitRender
 /// 4 个参数：分辨率 / 帧率 / 码率（三档）/ 智能 HDR。
 ///
 /// 任一字段变更即时调 `store.mutateExportConfig` → 实时持久化（DraftStore.save 同步落盘）；
-/// "完成"按钮仅 dismiss，不二次落盘。
+/// "Done"按钮仅 dismiss，不二次落盘。
 struct ExportConfigSheet: View {
 
     let store: EditorStore
@@ -23,8 +23,8 @@ struct ExportConfigSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("分辨率") {
-                    Picker("分辨率", selection: $cfg.resolution) {
+                Section("Resolution") {
+                    Picker("Resolution", selection: $cfg.resolution) {
                         ForEach(ExportConfig.Resolution.allCases, id: \.self) { r in
                             Text(r.label).tag(r)
                         }
@@ -35,8 +35,8 @@ struct ExportConfigSheet: View {
                     }
                 }
 
-                Section("帧率") {
-                    Picker("帧率", selection: $cfg.fps) {
+                Section("Frame Rate") {
+                    Picker("Frame Rate", selection: $cfg.fps) {
                         ForEach(ExportConfig.FrameRate.allCases, id: \.self) { f in
                             Text(f.label).tag(f)
                         }
@@ -47,8 +47,8 @@ struct ExportConfigSheet: View {
                     }
                 }
 
-                Section("码率") {
-                    Picker("码率", selection: $cfg.bitrateTier) {
+                Section("Bitrate") {
+                    Picker("Bitrate", selection: $cfg.bitrateTier) {
                         ForEach(ExportConfig.BitrateTier.allCases, id: \.self) { b in
                             Text(b.label).tag(b)
                         }
@@ -59,8 +59,8 @@ struct ExportConfigSheet: View {
                     }
                 }
 
-                Section("高级") {
-                    Toggle("智能 HDR", isOn: $cfg.hdrEnabled)
+                Section("Advanced") {
+                    Toggle("Smart HDR", isOn: $cfg.hdrEnabled)
                         .disabled(!isHDRAvailable)
                         .onChange(of: cfg.hdrEnabled) { _, new in
                             store.mutateExportConfig { $0.hdrEnabled = new }
@@ -72,23 +72,23 @@ struct ExportConfigSheet: View {
                 }
 
                 Section {
-                    Button("恢复默认", role: .destructive) {
+                    Button("Restore Defaults", role: .destructive) {
                         store.resetExportConfigToDefault()
                         cfg = store.timeline.effectiveExportConfig    // 重新按 canvas 派生
                     }
                 }
 
-                Section("说明") {
-                    Text("默认跟随当前画布尺寸与帧率自动匹配最接近档位；可手动选择更高/更低分辨率。导出配置随工程保存，下次打开继续沿用。")
+                Section("About") {
+                    Text("By default, resolution and frame rate match the current canvas. You can choose a higher or lower resolution. Export settings are saved with the project and restored the next time you open it.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
             }
-            .navigationTitle("导出规格")
+            .navigationTitle("Export Settings")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("完成") { onDismiss() }
+                    Button("Done") { onDismiss() }
                         .fontWeight(.semibold)
                 }
             }
@@ -109,9 +109,9 @@ struct ExportConfigSheet: View {
 
     private var hdrFootnote: String {
         if isHDRAvailable {
-            return "开启后自动依据原素材色彩动态转译生成 HDR 画质视频"
+            return "When enabled, HDR video is generated based on the source media colors."
         }
-        return "智能 HDR 即将上线"
+        return "Smart HDR is coming soon."
     }
 }
 

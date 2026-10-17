@@ -7,7 +7,7 @@ import TimelineKitUIShared
 
 /// Bottom sheet for picking and adjusting a transition at a cut-point.
 /// V7: preset-based UI (tabs + grid + duration slider).
-/// Applies changes immediately on selection; "完成" dismisses.
+/// Applies changes immediately on selection; "Done" dismisses.
 struct TransitionEditSheet: View {
 
     let context: TransitionEditContext
@@ -59,9 +59,9 @@ struct TransitionEditSheet: View {
 
     private var presetsForTab: [(id: String, name: String, icon: String)] {
         var items: [(String, String, String)] = []
-        // "无" pinned first in 基础 tab.
+        // "None" pinned first in 基础 tab.
         if selectedTab == .basic {
-            items.append((Self.noneID, "无", "xmark.circle"))
+            items.append((Self.noneID, "None", "xmark.circle"))
         }
         if let entry = TransitionPresetRegistry.byCategory.first(where: { $0.category == selectedTab }) {
             for id in entry.ids {
@@ -125,11 +125,11 @@ struct TransitionEditSheet: View {
 
     private var header: some View {
         HStack {
-            Text(context.existingTransition == nil ? "添加转场" : "编辑转场")
+            Text(context.existingTransition == nil ? "Add Transition" : "Edit Transition")
                 .font(.headline)
                 .foregroundStyle(.white)
             Spacer()
-            Button("完成") { dismiss() }
+            Button("Done") { dismiss() }
                 .foregroundStyle(.white)
                 .fontWeight(.medium)
         }
@@ -183,7 +183,7 @@ struct TransitionEditSheet: View {
     private var durationSlider: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Text("时长")
+                Text("Duration")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                 Spacer()
@@ -200,7 +200,7 @@ struct TransitionEditSheet: View {
                         store.updateTransitionDuration(id: existing.id, duration: newVal)
                     }
             } else {
-                Text("0.2 s（最短）")
+                Text("0.2 s (minimum)")
                     .font(.subheadline.monospacedDigit())
                     .foregroundStyle(.white.opacity(0.6))
             }
@@ -289,20 +289,20 @@ extension EditorTransition.TransitionType {
 
     var displayName: String {
         switch self {
-        case .fade:             return "叠化"
-        case .dissolve:         return "溶解"
-        case .slideLeft:        return "左滑"
-        case .slideRight:       return "右滑"
-        case .slideUp:          return "上滑"
-        case .slideDown:        return "下滑"
-        case .zoom:             return "缩放"
-        case .wipe:             return "擦除"
-        case .crossFade:        return "叠化"
-        case .fadeThroughBlack: return "闪黑"
-        case .pushLeft:         return "推进·左"
-        case .pushRight:        return "推进·右"
-        case .zoomIn:           return "放大"
-        case .blurFade:         return "模糊叠化"
+        case .fade:             return "Crossfade"
+        case .dissolve:         return "Dissolve"
+        case .slideLeft:        return "Slide Left"
+        case .slideRight:       return "Slide Right"
+        case .slideUp:          return "Slide Up"
+        case .slideDown:        return "Slide Down"
+        case .zoom:             return "Zoom"
+        case .wipe:             return "Wipe"
+        case .crossFade:        return "Crossfade"
+        case .fadeThroughBlack: return "Fade Through Black"
+        case .pushLeft:         return "Push Left"
+        case .pushRight:        return "Push Right"
+        case .zoomIn:           return "Zoom In"
+        case .blurFade:         return "Blur Crossfade"
         }
     }
 

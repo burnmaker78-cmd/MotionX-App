@@ -119,7 +119,7 @@ struct VideoTrimSelectorSheet: View {
                 stopPlaybackTimer()
                 dismiss()
             } label: {
-                Text("返回")
+                Text("Back")
                     .font(.system(size: 16, weight: .medium))
                     .foregroundStyle(.white)
                     .frame(maxWidth: .infinity)
@@ -135,7 +135,7 @@ struct VideoTrimSelectorSheet: View {
                 stopPlaybackTimer()
                 dismiss()
             } label: {
-                Text("确定")
+                Text("OK")
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(.white)
                     .frame(maxWidth: .infinity)

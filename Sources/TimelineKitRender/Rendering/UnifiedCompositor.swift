@@ -518,11 +518,24 @@ print("[UC] t=\(t) imageLayers=\(instr.imageLayers.map { "z=\($0.zPosition) rang
     private func applyAdjustments(_ adj: SegmentAdjustment, to image: CIImage) -> CIImage {
         var result = image
 
+        // Exposure and basic tone controls.
+        if adj.exposure != 0 {
+            result = result.applyingFilter("CIExposureAdjust", parameters: [
+                kCIInputEVKey: adj.exposure
+            ])
+        }
+
         if adj.brightness != 0 || adj.contrast != 1.0 || adj.saturation != 1.0 {
             result = result.applyingFilter("CIColorControls", parameters: [
                 kCIInputBrightnessKey: adj.brightness,
                 kCIInputContrastKey:   adj.contrast,
                 kCIInputSaturationKey: adj.saturation
+            ])
+        }
+
+        if adj.vibrance != 0 {
+            result = result.applyingFilter("CIVibrance", parameters: [
+                "inputAmount": adj.vibrance
             ])
         }
 
@@ -533,11 +546,61 @@ print("[UC] t=\(t) imageLayers=\(instr.imageLayers.map { "z=\($0.zPosition) rang
             ])
         }
 
-        if adj.highlights != 0 || adj.shadows != 0 {
+        if adj.highlights != 0 || adj.shadows != 0 || adj.whites != 0 || adj.blacks != 0 {
+            let highlightAmount = min(1.0, max(0.0, 1.0 - adj.highlights - adj.whites * 0.5))
+            let shadowAmount = min(1.0, max(0.0, adj.shadows + adj.blacks * 0.5))
             result = result.applyingFilter("CIHighlightShadowAdjust", parameters: [
-                "inputHighlightAmount": 1.0 - adj.highlights,
-                "inputShadowAmount":    adj.shadows
+                "inputHighlightAmount": highlightAmount,
+                "inputShadowAmount": shadowAmount
             ])
+        }
+
+        if adj.sharpen > 0 {
+            result = result.applyingFilter("CISharpenLuminance", parameters: [
+                "inputSharpness": adj.sharpen
+            ])
+        }
+
+        if adj.clarity > 0 {
+            result = result.applyingFilter("CIUnsharpMask", parameters: [
+                "inputRadius": 2.0,
+                "inputIntensity": adj.clarity
+            ])
+        }
+
+        if adj.fade > 0 {
+            result = result.applyingFilter("CIColorControls", parameters: [
+                kCIInputSaturationKey: 1.0 - 0.35 * adj.fade,
+                kCIInputContrastKey: 1.0 - 0.2 * adj.fade,
+                kCIInputBrightnessKey: 0.04 * adj.fade
+            ])
+        }
+
+        if adj.vignette > 0 {
+            result = result.applyingFilter("CIVignette", parameters: [
+                kCIInputIntensityKey: adj.vignette * 2.0,
+                kCIInputRadiusKey: max(1.0, min(result.extent.width, result.extent.height) * 0.45)
+            ])
+        }
+
+        if adj.grain > 0, let random = CIFilter(name: "CIRandomGenerator")?.outputImage {
+            let noise = random
+                .cropped(to: result.extent)
+                .applyingFilter("CIColorControls", parameters: [
+                    kCIInputSaturationKey: 0.0
+                ])
+                .applyingFilter("CIColorMatrix", parameters: [
+                    "inputRVector": CIVector(x: 0.5, y: 0, z: 0, w: 0),
+                    "inputGVector": CIVector(x: 0, y: 0.5, z: 0, w: 0),
+                    "inputBVector": CIVector(x: 0, y: 0, z: 0.5, w: 0),
+                    "inputAVector": CIVector(x: 0, y: 0, z: 0, w: adj.grain * 0.18),
+                    "inputBiasVector": CIVector(x: 0.25, y: 0.25, z: 0.25, w: 0)
+                ])
+            result = noise
+                .applyingFilter("CISoftLightBlendMode", parameters: [
+                    kCIInputBackgroundImageKey: result
+                ])
+                .cropped(to: result.extent)
         }
 
         if let preset = adj.filterName {

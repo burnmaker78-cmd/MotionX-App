@@ -301,6 +301,14 @@ print("[UC] t=\(t) imageLayers=\(instr.imageLayers.map { "z=\($0.zPosition) rang
                 if !instr.backgroundAdjustment.isIdentity {
                     bgImg = applyAdjustments(instr.backgroundAdjustment, to: bgImg)
                 }
+
+                if !instr.backgroundEffects.isEmpty {
+                    bgImg = MotionXEffectsRenderer.apply(
+                        instr.backgroundEffects,
+                        to: bgImg,
+                        at: t
+                    )
+                }
                 sourceImage = fgImg.applyingFilter("CIDissolveTransition", parameters: [
                     kCIInputTargetImageKey: bgImg,
                     kCIInputTimeKey:        1.0 - fgOpacity
@@ -319,8 +327,16 @@ print("[UC] t=\(t) imageLayers=\(instr.imageLayers.map { "z=\($0.zPosition) rang
             }
         } else if let bg = bgBuf {
             var bgImg = coverFitToCanvas(CIImage(cvPixelBuffer: bg), canvasRect: canvasRect)
-            if !instr.backgroundAdjustment.isIdentity {
-                bgImg = applyAdjustments(instr.backgroundAdjustment, to: bgImg)
+            if !instr.foregroundAdjustment.isIdentity {
+                fgImg = applyAdjustments(instr.foregroundAdjustment, to: fgImg)
+            }
+
+            if !instr.foregroundEffects.isEmpty {
+                fgImg = MotionXEffectsRenderer.apply(
+                    instr.foregroundEffects,
+                    to: fgImg,
+                    at: t
+                )
             }
             if let fgCIImg = evalTransSpec(instr.transitionFgImageSpec) {
                 // Case 3 – image → video transition blend.
@@ -385,6 +401,8 @@ print("[UC] t=\(t) imageLayers=\(instr.imageLayers.map { "z=\($0.zPosition) rang
            sourceImage != nil, activeSubtitles.isEmpty,
            let buf = fgBuf ?? bgBuf,
            ((fgBuf != nil) ? instr.foregroundAdjustment : instr.backgroundAdjustment).isIdentity,
+           instr.foregroundEffects.allSatisfy({ !$0.isEnabled }),
+           instr.backgroundEffects.allSatisfy({ !$0.isEnabled }),
            bgBuf == nil || fgOpacity >= 1 {
             let bufW = CVPixelBufferGetWidth(buf)
             let bufH = CVPixelBufferGetHeight(buf)

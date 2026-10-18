@@ -101,7 +101,7 @@ final class UnifiedCompositorInstruction: NSObject, AVVideoCompositionInstructio
         transitionFgImageSpec: ImageLayerSpec?       = nil,
         transitionBgImageSpec: ImageLayerSpec?       = nil,
         foregroundEffects: [MotionXClipEffect] = [],
-        backgroundEffects: [MotionXClipEffect] = []      = nil
+        backgroundEffects: [MotionXClipEffect] = []
     ) {
         self.timeRange             = timeRange
         self.foregroundTrackID     = foregroundTrackID
@@ -290,45 +290,18 @@ print("[UC] t=\(t) imageLayers=\(instr.imageLayers.map { "z=\($0.zPosition) rang
         // 3. image → video   (image layer fades into video)
         // 4. image → image   (both pure image specs; pure-image transition)
         var sourceImage: CIImage?
-        if let fg = fgBuf {
-            var fgImg = coverFitToCanvas(CIImage(cvPixelBuffer: fg), canvasRect: canvasRect)
-            if !instr.foregroundAdjustment.isIdentity {
-                fgImg = applyAdjustments(instr.foregroundAdjustment, to: fgImg)
-            }
-            if let bg = bgBuf, fgOpacity < 1, fgOpacity > 0 {
-                // Case 1 – video → video transition blend.
-                var bgImg = coverFitToCanvas(CIImage(cvPixelBuffer: bg), canvasRect: canvasRect)
-                if !instr.backgroundAdjustment.isIdentity {
-                    bgImg = applyAdjustments(instr.backgroundAdjustment, to: bgImg)
-                }
 
-                if !instr.backgroundEffects.isEmpty {
-                    bgImg = MotionXEffectsRenderer.apply(
-                        instr.backgroundEffects,
-                        to: bgImg,
-                        at: t
-                    )
-                }
-                sourceImage = fgImg.applyingFilter("CIDissolveTransition", parameters: [
-                    kCIInputTargetImageKey: bgImg,
-                    kCIInputTimeKey:        1.0 - fgOpacity
-                ])
-            } else if let bgCIImg = evalTransSpec(instr.transitionBgImageSpec) {
-                // Case 2 – video → image transition blend.
-                // Note: no fgOpacity guard — CIDissolveTransition handles all values:
-                //   time=0 (fgOpacity=1) → fully shows fgImg; time=1 → fully shows bgCIImg.
-                sourceImage = fgImg.applyingFilter("CIDissolveTransition", parameters: [
-                    kCIInputTargetImageKey: bgCIImg,
-                    kCIInputTimeKey:        1.0 - fgOpacity
-                ])
-            } else {
-                // Steady-state video frame (no active transition blend).
-                sourceImage = fgImg
-            }
-        } else if let bg = bgBuf {
-            var bgImg = coverFitToCanvas(CIImage(cvPixelBuffer: bg), canvasRect: canvasRect)
+        if let fg = fgBuf {
+            var fgImg = coverFitToCanvas(
+                CIImage(cvPixelBuffer: fg),
+                canvasRect: canvasRect
+            )
+
             if !instr.foregroundAdjustment.isIdentity {
-                fgImg = applyAdjustments(instr.foregroundAdjustment, to: fgImg)
+                fgImg = applyAdjustments(
+                    instr.foregroundAdjustment,
+                    to: fgImg
+                )
             }
 
             if !instr.foregroundEffects.isEmpty {
@@ -338,39 +311,109 @@ print("[UC] t=\(t) imageLayers=\(instr.imageLayers.map { "z=\($0.zPosition) rang
                     at: t
                 )
             }
-            if let fgCIImg = evalTransSpec(instr.transitionFgImageSpec) {
-                // Case 3 – image → video transition blend.
-                // Note: no fgOpacity guard — CIDissolveTransition handles all values:
-                //   time=0 (fgOpacity=1) → fully shows fgCIImg (image); time=1 → bgImg.
-                sourceImage = fgCIImg.applyingFilter("CIDissolveTransition", parameters: [
-                    kCIInputTargetImageKey: bgImg,
-                    kCIInputTimeKey:        1.0 - fgOpacity
-                ])
+
+            if let bg = bgBuf, fgOpacity < 1, fgOpacity > 0 {
+                var bgImg = coverFitToCanvas(
+                    CIImage(cvPixelBuffer: bg),
+                    canvasRect: canvasRect
+                )
+
+                if !instr.backgroundAdjustment.isIdentity {
+                    bgImg = applyAdjustments(
+                        instr.backgroundAdjustment,
+                        to: bgImg
+                    )
+                }
+
+                if !instr.backgroundEffects.isEmpty {
+                    bgImg = MotionXEffectsRenderer.apply(
+                        instr.backgroundEffects,
+                        to: bgImg,
+                        at: t
+                    )
+                }
+
+                sourceImage = fgImg.applyingFilter(
+                    "CIDissolveTransition",
+                    parameters: [
+                        kCIInputTargetImageKey: bgImg,
+                        kCIInputTimeKey: 1.0 - fgOpacity
+                    ]
+                )
+            } else if let bgCIImg = evalTransSpec(
+                instr.transitionBgImageSpec
+            ) {
+                sourceImage = fgImg.applyingFilter(
+                    "CIDissolveTransition",
+                    parameters: [
+                        kCIInputTargetImageKey: bgCIImg,
+                        kCIInputTimeKey: 1.0 - fgOpacity
+                    ]
+                )
             } else {
-                // Only the background video track is live (fg is nil/sentinel).
+                sourceImage = fgImg
+            }
+
+        } else if let bg = bgBuf {
+            var bgImg = coverFitToCanvas(
+                CIImage(cvPixelBuffer: bg),
+                canvasRect: canvasRect
+            )
+
+            if !instr.backgroundAdjustment.isIdentity {
+                bgImg = applyAdjustments(
+                    instr.backgroundAdjustment,
+                    to: bgImg
+                )
+            }
+
+            if !instr.backgroundEffects.isEmpty {
+                bgImg = MotionXEffectsRenderer.apply(
+                    instr.backgroundEffects,
+                    to: bgImg,
+                    at: t
+                )
+            }
+
+            if let fgCIImg = evalTransSpec(
+                instr.transitionFgImageSpec
+            ) {
+                sourceImage = fgCIImg.applyingFilter(
+                    "CIDissolveTransition",
+                    parameters: [
+                        kCIInputTargetImageKey: bgImg,
+                        kCIInputTimeKey: 1.0 - fgOpacity
+                    ]
+                )
+            } else {
                 sourceImage = bgImg
             }
-        } else if instr.transitionFgImageSpec != nil || instr.transitionBgImageSpec != nil {
-            // Case 4 – image → image (or single-sided image) transition.
-            // requiredSourceTrackIDs=[] so no pixel buffers are delivered; both sides
-            // come from ImageLayerComposer. Apply CIDissolveTransition just like video.
-            let fgCIImg = evalTransSpec(instr.transitionFgImageSpec)
-            let bgCIImg = evalTransSpec(instr.transitionBgImageSpec)
-#if DEBUG
-            print("[UC] Case4 img→img t=\(String(format:"%.3f",t)) fgOpacity=\(String(format:"%.2f",fgOpacity)) hasFg=\(fgCIImg != nil) hasBg=\(bgCIImg != nil)")
-#endif
+
+        } else if instr.transitionFgImageSpec != nil
+                    || instr.transitionBgImageSpec != nil {
+
+            let fgCIImg = evalTransSpec(
+                instr.transitionFgImageSpec
+            )
+            let bgCIImg = evalTransSpec(
+                instr.transitionBgImageSpec
+            )
+
             if let fgI = fgCIImg, let bgI = bgCIImg {
-                sourceImage = fgI.applyingFilter("CIDissolveTransition", parameters: [
-                    kCIInputTargetImageKey: bgI,
-                    kCIInputTimeKey:        1.0 - fgOpacity
-                ])
+                sourceImage = fgI.applyingFilter(
+                    "CIDissolveTransition",
+                    parameters: [
+                        kCIInputTargetImageKey: bgI,
+                        kCIInputTimeKey: 1.0 - fgOpacity
+                    ]
+                )
             } else {
                 sourceImage = fgCIImg ?? bgCIImg
             }
+
         } else {
             sourceImage = nil
         }
-
         // ── Composite: bg layers → source → fg layers ───────────────────────
         // After Fix A every layer's extent is exactly canvasRect, so the
         // composited base.extent is canvasRect and renderAndFinish no longer

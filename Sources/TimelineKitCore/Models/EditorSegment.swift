@@ -1,49 +1,69 @@
+
 import Foundation
 
 /// A single clip placed on a track. The core editing unit.
-///
-/// Two time ranges:
-/// - `sourceRange`: which portion of the source asset to use (nil = full asset). Enables non-destructive trimming.
-/// - `targetRange`: where this clip lives on the timeline (always absolute seconds from origin).
 public struct EditorSegment: Identifiable, Sendable, Hashable, Codable {
 
-    // MARK: - Codable (custom for v4 backward compat)
+    // MARK: - Codable
 
     private enum CodingKeys: String, CodingKey {
         case id, materialID, sourceRange, targetRange, speed, transform
         case blendMode, keyframes, content
         case leadingTransitionID, trailingTransitionID
         case adjustment, sourceSceneID, sourceZIndex
-        case userZOrder
-        case animations  // V7: clip-level animation (in / out / combo)
+        case userZOrder, animations
+        case effects
     }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        self.id                    = try c.decode(UUID.self,             forKey: .id)
-        self.materialID            = try c.decode(UUID.self,             forKey: .materialID)
-        self.sourceRange           = try c.decodeIfPresent(TimeRange.self, forKey: .sourceRange)
-        self.targetRange           = try c.decode(TimeRange.self,         forKey: .targetRange)
-        self.speed                 = try c.decode(Double.self,            forKey: .speed)
-        self.transform             = try c.decode(SegmentTransform.self,  forKey: .transform)
-        self.blendMode             = try c.decode(BlendMode.self,         forKey: .blendMode)
-        self.keyframes             = try c.decode(KeyframeSet.self,       forKey: .keyframes)
-        self.content               = try c.decode(SegmentContent.self,    forKey: .content)
-        self.leadingTransitionID   = try c.decodeIfPresent(UUID.self,     forKey: .leadingTransitionID)
-        self.trailingTransitionID  = try c.decodeIfPresent(UUID.self,     forKey: .trailingTransitionID)
-        self.adjustment            = try c.decode(SegmentAdjustment.self, forKey: .adjustment)
-        self.sourceSceneID         = try c.decodeIfPresent(String.self,   forKey: .sourceSceneID)
-        self.sourceZIndex          = try c.decodeIfPresent(Int.self,      forKey: .sourceZIndex)
-        self.userZOrder            = try c.decodeIfPresent(Int.self,      forKey: .userZOrder)
-        self.animations            = try c.decodeIfPresent([ClipAnimation].self, forKey: .animations) ?? []
+
+        id = try c.decode(UUID.self, forKey: .id)
+        materialID = try c.decode(UUID.self, forKey: .materialID)
+        sourceRange = try c.decodeIfPresent(TimeRange.self, forKey: .sourceRange)
+        targetRange = try c.decode(TimeRange.self, forKey: .targetRange)
+        speed = try c.decode(Double.self, forKey: .speed)
+        transform = try c.decode(SegmentTransform.self, forKey: .transform)
+        blendMode = try c.decode(BlendMode.self, forKey: .blendMode)
+        keyframes = try c.decode(KeyframeSet.self, forKey: .keyframes)
+        content = try c.decode(SegmentContent.self, forKey: .content)
+
+        leadingTransitionID = try c.decodeIfPresent(
+            UUID.self, forKey: .leadingTransitionID
+        )
+        trailingTransitionID = try c.decodeIfPresent(
+            UUID.self, forKey: .trailingTransitionID
+        )
+
+        adjustment = try c.decode(
+            SegmentAdjustment.self, forKey: .adjustment
+        )
+        sourceSceneID = try c.decodeIfPresent(
+            String.self, forKey: .sourceSceneID
+        )
+        sourceZIndex = try c.decodeIfPresent(
+            Int.self, forKey: .sourceZIndex
+        )
+        userZOrder = try c.decodeIfPresent(
+            Int.self, forKey: .userZOrder
+        )
+
+        animations = try c.decodeIfPresent(
+            [ClipAnimation].self, forKey: .animations
+        ) ?? []
+
+        // Older projects do not contain this field.
+        effects = try c.decodeIfPresent(
+            [MotionXClipEffect].self, forKey: .effects
+        ) ?? []
     }
+
     public let id: UUID
     public var materialID: UUID
+    public var sourceRange: TimeRange?
+    public var targetRange: TimeRange
 
-    public var sourceRange: TimeRange?  // nil = use full asset
-    public var targetRange: TimeRange   // absolute timeline position
-
-    public var speed: Double            // 1.0 = normal, 0.5 = half speed
+    public var speed: Double
     public var transform: SegmentTransform
     public var blendMode: BlendMode
     public var keyframes: KeyframeSet
@@ -52,19 +72,18 @@ public struct EditorSegment: Identifiable, Sendable, Hashable, Codable {
     public var leadingTransitionID: UUID?
     public var trailingTransitionID: UUID?
 
-    /// Per-segment color and tone adjustments. Identity = no effect.
+    /// Per-segment color and tone adjustments.
     public var adjustment: SegmentAdjustment
 
-    // Round-trip metadata for VideoTimeline export
     public var sourceSceneID: String?
     public var sourceZIndex: Int?
-    /// v4: explicit user-controlled layer order. Higher = front. nil = auto
-    /// (legacy time-overlap stackDepth algorithm). Default nil for v1/v2/v3 compat.
     public var userZOrder: Int?
 
-    /// V7: clip-level animations (in / out / combo). Empty = no animations.
-    /// Saved as semantic + duration — never as baked keyframes.
+    /// Clip-level animations (in / out / combo).
     public var animations: [ClipAnimation]
+
+    /// Effects applied to this clip, in order.
+    public var effects: [MotionXClipEffect]
 
     public init(
         id: UUID = UUID(),
@@ -82,74 +101,168 @@ public struct EditorSegment: Identifiable, Sendable, Hashable, Codable {
         sourceSceneID: String? = nil,
         sourceZIndex: Int? = nil,
         userZOrder: Int? = nil,
-        animations: [ClipAnimation] = []
+        animations: [ClipAnimation] = [],
+        effects: [MotionXClipEffect] = []
     ) {
-        self.id                   = id
-        self.materialID           = materialID
-        self.sourceRange          = sourceRange
-        self.targetRange          = targetRange
-        self.speed                = speed
-        self.transform            = transform
-        self.blendMode            = blendMode
-        self.keyframes            = keyframes
-        self.content              = content
-        self.leadingTransitionID  = leadingTransitionID
+        self.id = id
+        self.materialID = materialID
+        self.sourceRange = sourceRange
+        self.targetRange = targetRange
+        self.speed = speed
+        self.transform = transform
+        self.blendMode = blendMode
+        self.keyframes = keyframes
+        self.content = content
+        self.leadingTransitionID = leadingTransitionID
         self.trailingTransitionID = trailingTransitionID
-        self.adjustment           = adjustment
-        self.sourceSceneID        = sourceSceneID
-        self.sourceZIndex         = sourceZIndex
-        self.userZOrder           = userZOrder
-        self.animations           = animations
+        self.adjustment = adjustment
+        self.sourceSceneID = sourceSceneID
+        self.sourceZIndex = sourceZIndex
+        self.userZOrder = userZOrder
+        self.animations = animations
+        self.effects = effects
     }
 }
 
-// MARK: - EditorSegment helpers
+// MARK: - Clip Effects
+
+/// Supported MotionX clip effects.
+public enum MotionXEffectKind: String, Sendable, Hashable, Codable, CaseIterable {
+    case glow
+    case tiles
+    case waveWarp
+    case oscillate
+
+    public var displayName: String {
+        switch self {
+        case .glow: return "Glow"
+        case .tiles: return "Tiles"
+        case .waveWarp: return "Wave Warp"
+        case .oscillate: return "Oscillate"
+        }
+    }
+}
+
+/// Saved settings for one effect on a clip.
+///
+/// Intensity, speed, and size are normalized control values.
+/// The renderer will interpret them according to the effect.
+public struct MotionXClipEffect: Identifiable, Sendable, Hashable, Codable {
+
+    public var id: UUID
+    public var kind: MotionXEffectKind
+    public var isEnabled: Bool
+    public var intensity: Double
+    public var speed: Double
+    public var size: Double
+
+    public init(
+        id: UUID = UUID(),
+        kind: MotionXEffectKind,
+        isEnabled: Bool = true,
+        intensity: Double = 0.5,
+        speed: Double = 0.5,
+        size: Double = 0.5
+    ) {
+        self.id = id
+        self.kind = kind
+        self.isEnabled = isEnabled
+        self.intensity = Self.clamp(intensity)
+        self.speed = Self.clamp(speed)
+        self.size = Self.clamp(size)
+    }
+
+    private static func clamp(_ value: Double) -> Double {
+        guard value.isFinite else { return 0.5 }
+        return min(max(value, 0.0), 1.0)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, kind, isEnabled, intensity, speed, size
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+
+        id = try c.decode(UUID.self, forKey: .id)
+        kind = try c.decode(MotionXEffectKind.self, forKey: .kind)
+        isEnabled = try c.decodeIfPresent(
+            Bool.self, forKey: .isEnabled
+        ) ?? true
+
+        intensity = Self.clamp(
+            try c.decodeIfPresent(Double.self, forKey: .intensity) ?? 0.5
+        )
+        speed = Self.clamp(
+            try c.decodeIfPresent(Double.self, forKey: .speed) ?? 0.5
+        )
+        size = Self.clamp(
+            try c.decodeIfPresent(Double.self, forKey: .size) ?? 0.5
+        )
+    }
+}
+
+// MARK: - EditorSegment Helpers
 
 extension EditorSegment {
     public var isSubtitle: Bool {
         if case .subtitle = content { return true }
         return false
     }
+
     public var isText: Bool {
         if case .text = content { return true }
         return false
     }
+
     public var isAudio: Bool {
         if case .audio = content { return true }
         return false
     }
 }
 
-// MARK: - Animation accessors (V7)
+// MARK: - Animation Accessors
 
 extension EditorSegment {
+    public var inAnimation: ClipAnimation? {
+        animations.first { $0.timing == .in }
+    }
 
-    public var inAnimation: ClipAnimation?    { animations.first { $0.timing == .in } }
-    public var outAnimation: ClipAnimation?   { animations.first { $0.timing == .out } }
-    public var comboAnimation: ClipAnimation? { animations.first { $0.timing == .combo } }
+    public var outAnimation: ClipAnimation? {
+        animations.first { $0.timing == .out }
+    }
+
+    public var comboAnimation: ClipAnimation? {
+        animations.first { $0.timing == .combo }
+    }
 
     /// Set or replace a clip animation.
-    /// Setting a combo animation clears any existing in/out animations (mutually exclusive).
-    /// Setting in/out clears any existing combo and any prior animation of the same timing.
+    /// Combo animations are mutually exclusive with in/out animations.
     public mutating func setAnimation(_ anim: ClipAnimation) {
         if anim.timing == .combo {
             animations = [anim]
         } else {
-            animations.removeAll { $0.timing == anim.timing || $0.timing == .combo }
+            animations.removeAll {
+                $0.timing == anim.timing || $0.timing == .combo
+            }
             animations.append(anim)
         }
     }
 
-    /// Remove the animation for the given timing, if any.
     public mutating func removeAnimation(timing: AnimationTiming) {
         animations.removeAll { $0.timing == timing }
     }
 }
 
+// MARK: - Blend Modes
+
 public enum BlendMode: String, Sendable, Hashable, Codable, CaseIterable {
     case normal
-    case multiply, screen, overlay
+    case multiply
+    case screen
+    case overlay
     case hardLight = "hard_light"
     case softLight = "soft_light"
-    case difference, exclusion
+    case difference
+    case exclusion
 }

@@ -5,8 +5,6 @@ import CoreGraphics
 import TimelineKitCore
 
 /// Applies MotionX clip effects to a Core Image frame.
-///
-/// Effects are processed in the order stored on the clip.
 public enum MotionXEffectsRenderer {
 
     public static func apply(
@@ -29,7 +27,6 @@ public enum MotionXEffectsRenderer {
             switch effect.kind {
 
             case .glow:
-                // Soft glow around bright areas.
                 let radius = 2.0 + size * 38.0
                 let amount = intensity * 2.0
 
@@ -42,7 +39,6 @@ public enum MotionXEffectsRenderer {
                 )
 
             case .tiles:
-                // Repeat the image using an affine tiling transform.
                 let scale = 1.0 / (1.0 + size * 3.0)
 
                 let transform = CGAffineTransform(
@@ -60,7 +56,6 @@ public enum MotionXEffectsRenderer {
                 .cropped(to: originalExtent)
 
             case .waveWarp:
-                // Distort the image with a moving wave.
                 let radius = max(
                     originalExtent.width,
                     originalExtent.height
@@ -76,18 +71,21 @@ public enum MotionXEffectsRenderer {
                             y: originalExtent.midY
                         ),
                         kCIInputRadiusKey: radius,
-                        kCIInputScaleKey: intensity * 0.08,
-                        "inputAngle": phase
+                        "inputAngle": phase,
+                        "inputWidth": max(
+                            0.1,
+                            Double(intensity) * 100.0
+                        )
                     ]
                 )
                 .cropped(to: originalExtent)
 
             case .oscillate:
-                // Move the frame back and forth over time.
                 let phase = time * (1.0 + speed * 7.0)
                     * 2.0 * Double.pi
 
-                let distance = Double(size) * Double(intensity) * 45.0
+                let distance =
+                    Double(size) * Double(intensity) * 45.0
 
                 let offsetX = CGFloat(sin(phase) * distance)
                 let offsetY = CGFloat(cos(phase) * distance)

@@ -47,10 +47,12 @@ final class UnifiedCompositorInstruction: NSObject, AVVideoCompositionInstructio
     // Foreground (top) track — always present
     let foregroundTrackID:   CMPersistentTrackID
     let foregroundAdjustment: SegmentAdjustment
+    let foregroundEffects: [MotionXClipEffect]
 
     // Background (bottom) track — non-nil only during transitions
     let backgroundTrackID:   CMPersistentTrackID?
     let backgroundAdjustment: SegmentAdjustment
+    let backgroundEffects: [MotionXClipEffect]
 
     // Foreground opacity at start/end of this instruction's timeRange
     let fgOpacityStart: Float
@@ -97,13 +99,17 @@ final class UnifiedCompositorInstruction: NSObject, AVVideoCompositionInstructio
         isBlackOut:            Bool                 = false,
         imageLayers:           [ImageLayerSpec]      = [],
         transitionFgImageSpec: ImageLayerSpec?       = nil,
-        transitionBgImageSpec: ImageLayerSpec?       = nil
+        transitionBgImageSpec: ImageLayerSpec?       = nil,
+        foregroundEffects: [MotionXClipEffect] = [],
+        backgroundEffects: [MotionXClipEffect] = []      = nil
     ) {
         self.timeRange             = timeRange
         self.foregroundTrackID     = foregroundTrackID
         self.foregroundAdjustment  = foregroundAdjustment
+        self.foregroundEffects     = foregroundEffects
         self.backgroundTrackID     = backgroundTrackID
         self.backgroundAdjustment  = backgroundAdjustment
+        self.backgroundEffects     = backgroundEffects
         self.fgOpacityStart        = fgOpacityStart
         self.fgOpacityEnd          = fgOpacityEnd
         self.easing                = easing
@@ -123,15 +129,13 @@ final class UnifiedCompositorInstruction: NSObject, AVVideoCompositionInstructio
         // Image layers are generated procedurally by ImageLayerComposer; there is no
         // AVAssetTrack source. AVFoundation must invoke the compositor every frame —
         // never use a passthrough path — so enablePostProcessing must be true.
-        self.enablePostProcessing = isTransition || hasColor || hasImageLayers
+        let hasEffects = foregroundEffects.contains(where: { $0.isEnabled })
+            || backgroundEffects.contains(where: { $0.isEnabled })
 
-        // Stage 0 Fix 2 – containsTweening
-        // Each compositionTime yields a distinct animated frame. containsTweening=false
-        // allows the playback path to cache/reuse the previous compositor output (seek
-        // still works because it always forces a single-frame render — that was the
-        // seek-OK/play-broken split the user observed). Must be true for image layers.
+        self.enablePostProcessing = isTransition || hasColor || hasImageLayers || hasEffects
+
         let hasTween = fgOpacityStart != fgOpacityEnd
-        self.containsTweening = hasTween || hasImageLayers
+        self.containsTweening = hasTween || hasImageLayers || hasEffects
 
         // Stage 0 Fix 3 – requiredSourceTrackIDs
         //

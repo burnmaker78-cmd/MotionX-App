@@ -517,7 +517,8 @@ public actor CompositionBuilder {
                     timeRange:            cmRange(bodyStart, bodyEnd),
                     foregroundTrackID:    segTrackID,
                     foregroundAdjustment: seg.adjustment,
-                    imageLayers:          imageLayers
+                    imageLayers:          imageLayers,
+                    foregroundEffects:    seg.effects
                 ))
             }
 
@@ -590,7 +591,9 @@ public actor CompositionBuilder {
                 easing:                trans.easing,
                 imageLayers:           transImageLayers,
                 transitionFgImageSpec: transFgImageSpec,
-                transitionBgImageSpec: transBgImageSpec
+                transitionBgImageSpec: transBgImageSpec,
+                foregroundEffects:     fgSegForTrans.effects,
+                backgroundEffects:     bgSegForTrans.effects
             ))
         }
 

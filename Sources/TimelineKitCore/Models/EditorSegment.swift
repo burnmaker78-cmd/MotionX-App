@@ -14,6 +14,7 @@ public struct EditorSegment: Identifiable, Sendable, Hashable, Codable {
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
+
         id = try c.decode(UUID.self, forKey: .id)
         materialID = try c.decode(UUID.self, forKey: .materialID)
         sourceRange = try c.decodeIfPresent(TimeRange.self, forKey: .sourceRange)
@@ -49,8 +50,6 @@ public struct EditorSegment: Identifiable, Sendable, Hashable, Codable {
     public var sourceZIndex: Int?
     public var userZOrder: Int?
     public var animations: [ClipAnimation]
-
-    /// Effects attached to this clip.
     public var effects: [MotionXClipEffect]
 
     public init(

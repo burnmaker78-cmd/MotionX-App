@@ -12,17 +12,17 @@ public enum EditorToolCategory: String, CaseIterable, Identifiable {
     case audio = "Audio"
     case text = "Text"
     case sticker = "Stickers"
-    case effects = "Effects"
     case transition = "Transition"
     case adjust = "Adjust"
-    case animation = "Animation"
+    case animation = "Animations"
+    case effects = "Effects"
 
     public var id: String { rawValue }
 
     /// Only show categories that are available in this version.
     var isEnabled: Bool {
         switch self {
-        case .clip, .audio, .text, .transition, .adjust, .animation:
+        case .clip, .audio, .text, .transition, .adjust, .animation, .effects:
             return true
         default:
             return false
@@ -35,10 +35,10 @@ public enum EditorToolCategory: String, CaseIterable, Identifiable {
         case .audio:      return "music.note"
         case .text:       return "textformat"
         case .sticker:    return "face.smiling"
-        case .effects:    return "sparkles"
         case .transition: return "arrow.left.and.right.square"
         case .adjust:     return "slider.horizontal.3"
         case .animation:  return "wand.and.stars"
+        case .effects:    return "sparkles"
         }
     }
 }
@@ -174,13 +174,13 @@ struct EditorSecondaryToolPanel: View {
             toolItem("Audio", icon: "music.note")
 
         case .animation:
-            toolItem("Animation", icon: "wand.and.stars")
-
-        case .sticker:
-            toolItem("Stickers", icon: "face.smiling")
+            toolItem("Animations", icon: "wand.and.stars")
 
         case .effects:
             toolItem("Effects", icon: "sparkles")
+
+        case .sticker:
+            toolItem("Stickers", icon: "face.smiling")
         }
     }
 

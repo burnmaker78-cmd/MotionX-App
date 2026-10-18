@@ -1,23 +1,19 @@
 
 import Foundation
 
-/// A single clip placed on a track. The core editing unit.
+/// A single clip placed on a track.
 public struct EditorSegment: Identifiable, Sendable, Hashable, Codable {
-
-    // MARK: - Codable (backward compatibility)
 
     private enum CodingKeys: String, CodingKey {
         case id, materialID, sourceRange, targetRange, speed, transform
         case blendMode, keyframes, content
         case leadingTransitionID, trailingTransitionID
         case adjustment, sourceSceneID, sourceZIndex, userZOrder
-        case animations
-        case effects
+        case animations, effects
     }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-
         id = try c.decode(UUID.self, forKey: .id)
         materialID = try c.decode(UUID.self, forKey: .materialID)
         sourceRange = try c.decodeIfPresent(TimeRange.self, forKey: .sourceRange)
@@ -41,27 +37,20 @@ public struct EditorSegment: Identifiable, Sendable, Hashable, Codable {
     public var materialID: UUID
     public var sourceRange: TimeRange?
     public var targetRange: TimeRange
-
     public var speed: Double
     public var transform: SegmentTransform
     public var blendMode: BlendMode
     public var keyframes: KeyframeSet
     public var content: SegmentContent
-
     public var leadingTransitionID: UUID?
     public var trailingTransitionID: UUID?
-
-    /// Per-segment color and tone adjustments.
     public var adjustment: SegmentAdjustment
-
     public var sourceSceneID: String?
     public var sourceZIndex: Int?
     public var userZOrder: Int?
-
-    /// Clip-level animations.
     public var animations: [ClipAnimation]
 
-    /// Effects applied to this clip during rendering.
+    /// Effects attached to this clip.
     public var effects: [MotionXClipEffect]
 
     public init(
@@ -103,8 +92,6 @@ public struct EditorSegment: Identifiable, Sendable, Hashable, Codable {
     }
 }
 
-// MARK: - EditorSegment helpers
-
 extension EditorSegment {
     public var isSubtitle: Bool {
         if case .subtitle = content { return true }
@@ -120,11 +107,7 @@ extension EditorSegment {
         if case .audio = content { return true }
         return false
     }
-}
 
-// MARK: - Animation accessors
-
-extension EditorSegment {
     public var inAnimation: ClipAnimation? {
         animations.first { $0.timing == .in }
     }
@@ -152,8 +135,6 @@ extension EditorSegment {
         animations.removeAll { $0.timing == timing }
     }
 }
-
-// MARK: - Clip effects
 
 public enum MotionXEffectKind: String, Sendable, Hashable, Codable, CaseIterable {
     case glow
@@ -186,8 +167,6 @@ public struct MotionXClipEffect: Identifiable, Sendable, Hashable, Codable {
         self.size = size
     }
 }
-
-// MARK: - Blend modes
 
 public enum BlendMode: String, Sendable, Hashable, Codable, CaseIterable {
     case normal

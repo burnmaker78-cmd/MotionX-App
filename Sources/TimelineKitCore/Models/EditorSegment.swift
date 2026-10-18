@@ -4,14 +4,14 @@ import Foundation
 /// A single clip placed on a track. The core editing unit.
 public struct EditorSegment: Identifiable, Sendable, Hashable, Codable {
 
-    // MARK: - Codable
+    // MARK: - Codable (backward compatibility)
 
     private enum CodingKeys: String, CodingKey {
         case id, materialID, sourceRange, targetRange, speed, transform
         case blendMode, keyframes, content
         case leadingTransitionID, trailingTransitionID
-        case adjustment, sourceSceneID, sourceZIndex
-        case userZOrder, animations
+        case adjustment, sourceSceneID, sourceZIndex, userZOrder
+        case animations
         case effects
     }
 
@@ -27,35 +27,14 @@ public struct EditorSegment: Identifiable, Sendable, Hashable, Codable {
         blendMode = try c.decode(BlendMode.self, forKey: .blendMode)
         keyframes = try c.decode(KeyframeSet.self, forKey: .keyframes)
         content = try c.decode(SegmentContent.self, forKey: .content)
-
-        leadingTransitionID = try c.decodeIfPresent(
-            UUID.self, forKey: .leadingTransitionID
-        )
-        trailingTransitionID = try c.decodeIfPresent(
-            UUID.self, forKey: .trailingTransitionID
-        )
-
-        adjustment = try c.decode(
-            SegmentAdjustment.self, forKey: .adjustment
-        )
-        sourceSceneID = try c.decodeIfPresent(
-            String.self, forKey: .sourceSceneID
-        )
-        sourceZIndex = try c.decodeIfPresent(
-            Int.self, forKey: .sourceZIndex
-        )
-        userZOrder = try c.decodeIfPresent(
-            Int.self, forKey: .userZOrder
-        )
-
-        animations = try c.decodeIfPresent(
-            [ClipAnimation].self, forKey: .animations
-        ) ?? []
-
-        // Older projects do not contain this field.
-        effects = try c.decodeIfPresent(
-            [MotionXClipEffect].self, forKey: .effects
-        ) ?? []
+        leadingTransitionID = try c.decodeIfPresent(UUID.self, forKey: .leadingTransitionID)
+        trailingTransitionID = try c.decodeIfPresent(UUID.self, forKey: .trailingTransitionID)
+        adjustment = try c.decodeIfPresent(SegmentAdjustment.self, forKey: .adjustment) ?? .identity
+        sourceSceneID = try c.decodeIfPresent(String.self, forKey: .sourceSceneID)
+        sourceZIndex = try c.decodeIfPresent(Int.self, forKey: .sourceZIndex)
+        userZOrder = try c.decodeIfPresent(Int.self, forKey: .userZOrder)
+        animations = try c.decodeIfPresent([ClipAnimation].self, forKey: .animations) ?? []
+        effects = try c.decodeIfPresent([MotionXClipEffect].self, forKey: .effects) ?? []
     }
 
     public let id: UUID
@@ -79,10 +58,10 @@ public struct EditorSegment: Identifiable, Sendable, Hashable, Codable {
     public var sourceZIndex: Int?
     public var userZOrder: Int?
 
-    /// Clip-level animations (in / out / combo).
+    /// Clip-level animations.
     public var animations: [ClipAnimation]
 
-    /// Effects applied to this clip, in order.
+    /// Effects applied to this clip during rendering.
     public var effects: [MotionXClipEffect]
 
     public init(
@@ -124,85 +103,7 @@ public struct EditorSegment: Identifiable, Sendable, Hashable, Codable {
     }
 }
 
-// MARK: - Clip Effects
-
-/// Supported MotionX clip effects.
-public enum MotionXEffectKind: String, Sendable, Hashable, Codable, CaseIterable {
-    case glow
-    case tiles
-    case waveWarp
-    case oscillate
-
-    public var displayName: String {
-        switch self {
-        case .glow: return "Glow"
-        case .tiles: return "Tiles"
-        case .waveWarp: return "Wave Warp"
-        case .oscillate: return "Oscillate"
-        }
-    }
-}
-
-/// Saved settings for one effect on a clip.
-///
-/// Intensity, speed, and size are normalized control values.
-/// The renderer will interpret them according to the effect.
-public struct MotionXClipEffect: Identifiable, Sendable, Hashable, Codable {
-
-    public var id: UUID
-    public var kind: MotionXEffectKind
-    public var isEnabled: Bool
-    public var intensity: Double
-    public var speed: Double
-    public var size: Double
-
-    public init(
-        id: UUID = UUID(),
-        kind: MotionXEffectKind,
-        isEnabled: Bool = true,
-        intensity: Double = 0.5,
-        speed: Double = 0.5,
-        size: Double = 0.5
-    ) {
-        self.id = id
-        self.kind = kind
-        self.isEnabled = isEnabled
-        self.intensity = Self.clamp(intensity)
-        self.speed = Self.clamp(speed)
-        self.size = Self.clamp(size)
-    }
-
-    private static func clamp(_ value: Double) -> Double {
-        guard value.isFinite else { return 0.5 }
-        return min(max(value, 0.0), 1.0)
-    }
-
-    private enum CodingKeys: String, CodingKey {
-        case id, kind, isEnabled, intensity, speed, size
-    }
-
-    public init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-
-        id = try c.decode(UUID.self, forKey: .id)
-        kind = try c.decode(MotionXEffectKind.self, forKey: .kind)
-        isEnabled = try c.decodeIfPresent(
-            Bool.self, forKey: .isEnabled
-        ) ?? true
-
-        intensity = Self.clamp(
-            try c.decodeIfPresent(Double.self, forKey: .intensity) ?? 0.5
-        )
-        speed = Self.clamp(
-            try c.decodeIfPresent(Double.self, forKey: .speed) ?? 0.5
-        )
-        size = Self.clamp(
-            try c.decodeIfPresent(Double.self, forKey: .size) ?? 0.5
-        )
-    }
-}
-
-// MARK: - EditorSegment Helpers
+// MARK: - EditorSegment helpers
 
 extension EditorSegment {
     public var isSubtitle: Bool {
@@ -221,7 +122,7 @@ extension EditorSegment {
     }
 }
 
-// MARK: - Animation Accessors
+// MARK: - Animation accessors
 
 extension EditorSegment {
     public var inAnimation: ClipAnimation? {
@@ -236,8 +137,6 @@ extension EditorSegment {
         animations.first { $0.timing == .combo }
     }
 
-    /// Set or replace a clip animation.
-    /// Combo animations are mutually exclusive with in/out animations.
     public mutating func setAnimation(_ anim: ClipAnimation) {
         if anim.timing == .combo {
             animations = [anim]
@@ -254,15 +153,46 @@ extension EditorSegment {
     }
 }
 
-// MARK: - Blend Modes
+// MARK: - Clip effects
+
+public enum MotionXEffectKind: String, Sendable, Hashable, Codable, CaseIterable {
+    case glow
+    case tiles
+    case waveWarp
+    case oscillate
+}
+
+public struct MotionXClipEffect: Identifiable, Sendable, Hashable, Codable {
+    public var id: UUID
+    public var kind: MotionXEffectKind
+    public var isEnabled: Bool
+    public var intensity: Double
+    public var speed: Double
+    public var size: Double
+
+    public init(
+        id: UUID = UUID(),
+        kind: MotionXEffectKind,
+        isEnabled: Bool = true,
+        intensity: Double = 0.5,
+        speed: Double = 0.5,
+        size: Double = 0.5
+    ) {
+        self.id = id
+        self.kind = kind
+        self.isEnabled = isEnabled
+        self.intensity = intensity
+        self.speed = speed
+        self.size = size
+    }
+}
+
+// MARK: - Blend modes
 
 public enum BlendMode: String, Sendable, Hashable, Codable, CaseIterable {
     case normal
-    case multiply
-    case screen
-    case overlay
+    case multiply, screen, overlay
     case hardLight = "hard_light"
     case softLight = "soft_light"
-    case difference
-    case exclusion
+    case difference, exclusion
 }
